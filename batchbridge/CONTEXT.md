@@ -19,11 +19,31 @@ retailer records. It does not diagnose contamination or trigger recalls automati
 
 ## Core workflow
 
-`New report -> Under review -> Retailer checks -> Manufacturer review -> Closed`
+`New report -> Triage -> Retailer/importer review -> Traceability -> Retailer checks -> Escalation -> Manufacturer review -> Importer verdict -> Closed`
 
 `Waiting for information` is a temporary case state. A report is suspicion, not proof. The agent may
 recommend a batch match and draft handoffs, but a human decides whether to send them. A negative
 visual inspection never clears an entire batch. Urgent escalation does not wait for every retailer.
+
+### Agent responsibilities and approval gates
+
+1. **Triage Agent:** runs when a customer or retailer report is created, reads the case, product
+   candidates, and related reports, then recommends forwarding, requesting information, or review.
+   A retailer may review and forward the report; otherwise an importer investigator reviews the
+   triage proposal before traceability can start.
+2. **Traceability Agent:** runs after retailer forwarding or approved triage. It resolves product
+   plus manufacturer lot against importer records and proposes retailer checks from exact shipment
+   records. An importer investigator approves the proposal before checks are assigned.
+3. **Escalation Agent:** runs after the traceability proposal is approved and at least one retailer
+   submits a human finding. It prepares an evidence packet and flags missing or conflicting
+   information. The importer separately approves sending the packet to the manufacturer.
+4. **Manufacturer and importer:** a manufacturer reviewer submits the company response. The importer
+   investigator records the final human verdict and closes the case.
+
+Each agent is a separately queued LangGraph run, writes a typed proposal, and pauses at a human
+interrupt. The API and database enforce the gates; resuming a graph is not the source of truth for
+an approval. A retailer can create an inspection report or review a customer report, and customer
+reports can also enter the importer queue directly.
 
 ## Data rules
 
@@ -37,17 +57,20 @@ visual inspection never clears an entire batch. Urgent escalation does not wait 
 ## Technical decisions
 
 - API: Python 3.12, FastAPI, SQLAlchemy, Alembic.
-- Workflow: three bounded LangGraph agents for triage, traceability, and escalation, each ending at
-  an explicit human interrupt.
+- Workflow: three separately invoked bounded LangGraph agents for triage, traceability, and
+  escalation, each ending at an explicit human interrupt and persisted proposal.
 - Model: Groq `openai/gpt-oss-20b`, configurable with `GROQ_MODEL`.
 - Tools: one real MCP stdio server with read-only case, product, batch, shipment, report, evidence,
-  approval, timeline, and inspection lookups. Each agent has a strict tool allowlist.
+  timeline, distribution, and inspection lookups. Each agent has a strict tool allowlist; approvals
+  and mutations stay in authenticated API handlers.
 - Database: PostgreSQL 17 on Alternate Clouds; SQLite is supported for local development and tests.
 - Authentication: seeded password-protected staff accounts, server-side sessions, fixed roles and
   organizations, no public signup.
 - Notifications: in-app inboxes only.
 - Frontend target: responsive React, TypeScript, Vite, and Tailwind served from the same application
   origin in production.
+- Production image: Docker builds the frontend with Node, copies its static assets into the Python
+  image, runs Alembic migrations, then starts FastAPI/Uvicorn on the platform-provided port.
 
 ## Demo dataset
 

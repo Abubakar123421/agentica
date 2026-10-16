@@ -56,23 +56,44 @@ truth.
 sequenceDiagram
     participant U as Customer or retailer
     participant A as API
+    participant R as Retailer safety manager
     participant H as Importer investigator
-    participant L as Selected LangGraph agent
-    participant T as MCP tools
+    participant T as Triage Agent
+    participant X as Traceability Agent
+    participant E as Escalation Agent
+    participant Q as MCP tools
     participant D as PostgreSQL
 
     U->>A: Submit suspected issue
     A->>D: Store case and audit event
-    H->>A: Start analysis
-    A->>L: Queue investigation
-    L->>T: Read case and catalogue evidence
-    T->>D: Query exact records
-    D-->>T: Products, batch, shipments, reports
-    T-->>L: Structured evidence
-    L-->>D: Save proposal and explanation
-    H->>A: Approve or reject proposal
-    A->>D: Apply approved tasks and append audit event
+    A->>T: Queue triage run
+    T->>Q: Read case, product candidates, related reports
+    Q->>D: Query approved operational records
+    D-->>Q: Structured evidence
+    Q-->>T: Evidence and tool trace
+    T-->>D: Save triage proposal and run
+    R->>A: Review/forward (if retailer-originated review)
+    H->>A: Approve triage when required
+    A->>X: Queue traceability after gate
+    X->>Q: Read batch and distribution records
+    Q->>D: Query exact product/lot shipment data
+    D-->>X: Batch recipients and quantities
+    X-->>D: Save inspection proposal
+    H->>A: Approve retailer checks
+    A->>D: Create retailer tasks and audit event
+    R->>A: Submit human inspection finding
+    H->>A: Start escalation analysis
+    A->>E: Queue escalation run
+    E->>Q: Read approved trace, findings, evidence, timeline
+    E-->>D: Save manufacturer packet proposal
+    H->>A: Approve packet delivery
+    A->>D: Create escalation and audit event
 ```
+
+The diagram shows the usual path. A customer report is visible to the importer immediately, and a
+retailer-forwarded report can satisfy the triage gate. The application permits escalation analysis
+after at least one completed retailer finding; it does not require every recipient to finish before
+the importer can consider an urgent escalation.
 
 ## Core data relationships
 

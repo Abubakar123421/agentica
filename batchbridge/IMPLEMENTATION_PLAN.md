@@ -47,6 +47,7 @@
 - [x] Add an optional bounded Groq assessment with deterministic fallback.
 - [x] Store runs, proposals, confidence, evidence, and errors.
 - [x] Enforce an explicit human approval boundary before any proposed action is applied.
+- [x] Expose per-agent MCP tool-call traces in the case detail response and frontend.
 
 ## Phase 5: verification
 
@@ -75,6 +76,7 @@
 
 - [x] Add Dockerfile, health endpoints, environment contract, and deployment guide.
 - [x] Push the repository to GitHub on `main`.
+- [ ] Confirm the current GitHub repository is connected to the Alternate Clouds application service.
 - [ ] Create a PostgreSQL 17 template service with persistent storage.
 - [ ] Create a GitHub application service using `batchbridge` as the root directory.
 - [ ] Link PostgreSQL to the application with alias `DB`.

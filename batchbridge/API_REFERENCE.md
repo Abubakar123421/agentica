@@ -65,6 +65,13 @@ Browser clients must send cookies on authenticated requests.
 Manufacturer escalation requires an approved traceability proposal, at least one completed retailer
 finding, and importer approval of the escalation-agent packet.
 
+Triage is automatically queued for public reports and retailer-originated reports. Retailer staff
+can also run triage and forward or hold a customer report. Traceability can start after retailer
+forwarding or importer approval of triage. Only the importer can approve proposals, create retailer
+checks, or approve the manufacturer packet. A traceability proposal creates checks only when
+approved; escalation analysis is rejected until an approved traceability result and a completed
+retailer finding exist.
+
 ## Manufacturer endpoints
 
 | Method | Path | Purpose |
@@ -89,3 +96,14 @@ The stdio server in `backend/app/mcp_server.py` exposes these read-only tools:
 - `get_distribution_summary(batch_id)`
 
 Tool output preserves database identifiers. Reporter contact details are intentionally absent.
+
+### Per-agent tool allowlists
+
+| Agent | MCP tools available |
+| --- | --- |
+| Triage | `get_case`, `search_products`, `find_related_reports` |
+| Traceability | `get_case`, `search_products`, `get_batch`, `find_related_reports`, `get_batch_shipments`, `get_non_recipient_retailers`, `get_distribution_summary` |
+| Escalation | `get_case`, `get_approved_traceability`, `get_batch_shipments`, `get_inspection_findings`, `get_case_evidence_metadata`, `get_case_timeline`, `get_distribution_summary` |
+
+The MCP server is read-only. Approvals, task creation, escalation delivery, and final verdicts are
+performed by role-checked API handlers and recorded in the case timeline.
