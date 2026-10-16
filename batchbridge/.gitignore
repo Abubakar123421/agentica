@@ -7,4 +7,6 @@ __pycache__/
 .ruff_cache/
 batchbridge.db*
 dist/
+node_modules/
+*.tsbuildinfo
 

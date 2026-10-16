@@ -1,8 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from app.api import (
@@ -69,11 +72,30 @@ app.include_router(cases.router, prefix="/api/v1")
 app.include_router(inspections.router, prefix="/api/v1")
 app.include_router(escalations.router, prefix="/api/v1")
 
+frontend_dist = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
-@app.get("/")
-def root():
-    return {
-        "name": "BatchBridge API",
-        "docs": "/docs",
-        "health": "/health/ready",
-    }
+if frontend_dist.exists():
+    app.mount("/assets", StaticFiles(directory=frontend_dist / "assets"), name="frontend-assets")
+
+    @app.get("/", include_in_schema=False)
+    def frontend_root():
+        return FileResponse(frontend_dist / "index.html")
+
+    @app.get("/{path:path}", include_in_schema=False)
+    def frontend_fallback(path: str):
+        if path.startswith(("api/", "health/")):
+            raise HTTPException(status_code=404, detail="Not found")
+        candidate = (frontend_dist / path).resolve()
+        if frontend_dist.resolve() in candidate.parents and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(frontend_dist / "index.html")
+
+else:
+
+    @app.get("/")
+    def root():
+        return {
+            "name": "BatchBridge API",
+            "docs": "/docs",
+            "health": "/health/ready",
+        }

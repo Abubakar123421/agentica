@@ -1,7 +1,7 @@
 import asyncio
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import exists, select
 from sqlalchemy.orm import Session
 
@@ -13,6 +13,7 @@ from app.models import (
     Approval,
     AuditEvent,
     Case,
+    Escalation,
     Inspection,
     Proposal,
     RetailerReview,
@@ -27,7 +28,11 @@ from app.schemas import (
     StatusUpdate,
 )
 from app.security import token_hash
-from app.services.investigation import execute_investigation, resume_investigation
+from app.services.investigation import (
+    execute_investigation,
+    queue_investigation,
+    resume_investigation,
+)
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -74,6 +79,7 @@ def list_cases(user: User = Depends(current_user), db: Session = Depends(get_db)
 @router.post("/officer-report", response_model=CaseSummary, status_code=status.HTTP_201_CREATED)
 def create_officer_report(
     payload: OfficerReportCreate,
+    background_tasks: BackgroundTasks,
     user: User = Depends(require_roles("retailer_safety_manager")),
     db: Session = Depends(get_db),
 ):
@@ -92,7 +98,9 @@ def create_officer_report(
     db.add(case)
     db.flush()
     add_audit(db, case.id, "report_created", user.id, {"source": "retailer_officer"})
+    run, _ = queue_investigation(db, case.id, "triage", user.id)
     db.commit()
+    background_tasks.add_task(execute_investigation, run.id)
     return case
 
 
@@ -107,6 +115,9 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
     ).all()
     timeline = db.scalars(
         select(AuditEvent).where(AuditEvent.case_id == case.id).order_by(AuditEvent.created_at)
+    ).all()
+    agent_runs = db.scalars(
+        select(AgentRun).where(AgentRun.case_id == case.id).order_by(AgentRun.created_at)
     ).all()
     result = {
         "case": CaseSummary.model_validate(case).model_dump(mode="json"),
@@ -144,6 +155,18 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
                 "created_at": item.created_at,
             }
             for item in timeline
+        ],
+        "agent_runs": [
+            {
+                "id": item.id,
+                "agent_type": item.agent_type,
+                "status": item.status,
+                "result": item.result,
+                "error": item.error,
+                "created_at": item.created_at,
+                "completed_at": item.completed_at,
+            }
+            for item in agent_runs
         ],
     }
     if user.role == "importer_investigator":
@@ -186,6 +209,31 @@ def review_customer_case(
     elif payload.decision == "needs_customer_information":
         case.status = "waiting_for_information"
     db.flush()
+    triage_proposal = db.scalar(
+        select(Proposal)
+        .join(AgentRun, AgentRun.id == Proposal.agent_run_id)
+        .where(
+            Proposal.case_id == case.id,
+            Proposal.status == "pending",
+            AgentRun.agent_type == "triage",
+        )
+        .order_by(Proposal.version.desc())
+    )
+    if triage_proposal and not db.scalar(
+        select(Approval).where(Approval.proposal_id == triage_proposal.id)
+    ):
+        triage_decision = "approved" if payload.decision == "forwarded" else "changes_requested"
+        db.add(
+            Approval(
+                proposal_id=triage_proposal.id,
+                reviewer_id=user.id,
+                decision=triage_decision,
+                notes=payload.notes,
+            )
+        )
+        triage_proposal.status = triage_decision
+        triage_run = db.get(AgentRun, triage_proposal.agent_run_id)
+        triage_run.status = "completed"
     add_audit(
         db,
         case.id,
@@ -225,6 +273,33 @@ def update_case_status(
     return case
 
 
+async def _start_agent(
+    db: Session,
+    case: Case,
+    agent_type: str,
+    user: User,
+) -> AnalysisStartResponse:
+    run, created = queue_investigation(db, case.id, agent_type, user.id)
+    if agent_type == "traceability":
+        case.status = "under_review"
+    db.commit()
+    if created:
+        asyncio.create_task(execute_investigation(run.id))
+    return AnalysisStartResponse(run_id=run.id, status=run.status, agent_type=agent_type)
+
+
+@router.post("/{case_id}/triage", response_model=AnalysisStartResponse, status_code=202)
+async def start_triage(
+    case_id: str,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    case = _get_authorized_case(db, user, case_id)
+    if user.role not in {"retailer_safety_manager", "importer_investigator"}:
+        raise HTTPException(status_code=403, detail="Role not permitted")
+    return await _start_agent(db, case, "triage", user)
+
+
 @router.post("/{case_id}/analysis", response_model=AnalysisStartResponse, status_code=202)
 async def start_analysis(
     case_id: str,
@@ -232,27 +307,57 @@ async def start_analysis(
     db: Session = Depends(get_db),
 ):
     case = _get_authorized_case(db, user, case_id)
-    active = db.scalar(
-        select(AgentRun).where(
-            AgentRun.case_id == case.id,
-            AgentRun.status.in_(["queued", "running"]),
+    retailer_forwarded = db.scalar(
+        select(RetailerReview.id).where(
+            RetailerReview.case_id == case.id,
+            RetailerReview.decision == "forwarded",
         )
     )
-    if active:
-        return AnalysisStartResponse(run_id=active.id, status=active.status)
-    run = AgentRun(
-        case_id=case.id,
-        thread_id=f"case:{case.id}:run:{secrets.token_hex(6)}",
-        status="queued",
-        created_by_user_id=user.id,
+    approved_triage = db.scalar(
+        select(Proposal.id)
+        .join(AgentRun, AgentRun.id == Proposal.agent_run_id)
+        .join(Approval, Approval.proposal_id == Proposal.id)
+        .where(
+            Proposal.case_id == case.id,
+            AgentRun.agent_type == "triage",
+            Approval.decision == "approved",
+        )
     )
-    case.status = "under_review"
-    db.add(run)
-    db.flush()
-    add_audit(db, case.id, "agent_run_started", user.id, {"run_id": run.id})
-    db.commit()
-    asyncio.create_task(execute_investigation(run.id))
-    return AnalysisStartResponse(run_id=run.id, status=run.status)
+    if not retailer_forwarded and not approved_triage:
+        raise HTTPException(
+            status_code=409,
+            detail="Retailer triage approval is required before traceability",
+        )
+    return await _start_agent(db, case, "traceability", user)
+
+
+@router.post(
+    "/{case_id}/escalation-analysis", response_model=AnalysisStartResponse, status_code=202
+)
+async def start_escalation_analysis(
+    case_id: str,
+    user: User = Depends(require_roles("importer_investigator")),
+    db: Session = Depends(get_db),
+):
+    case = _get_authorized_case(db, user, case_id)
+    approved_trace = db.scalar(
+        select(Proposal.id).where(
+            Proposal.case_id == case.id,
+            Proposal.type == "retailer_inspections",
+            Proposal.status == "approved",
+        )
+    )
+    if not approved_trace:
+        raise HTTPException(status_code=409, detail="An approved batch proposal is required")
+    completed_finding = db.scalar(
+        select(Inspection.id).where(
+            Inspection.case_id == case.id,
+            Inspection.status == "completed",
+        )
+    )
+    if not completed_finding:
+        raise HTTPException(status_code=409, detail="At least one retailer finding is required")
+    return await _start_agent(db, case, "escalation", user)
 
 
 @router.get("/{case_id}/analysis/{run_id}")
@@ -269,6 +374,7 @@ def get_analysis(
     proposal = db.scalar(select(Proposal).where(Proposal.agent_run_id == run.id))
     return {
         "id": run.id,
+        "agent_type": run.agent_type,
         "status": run.status,
         "result": run.result,
         "error": run.error,
@@ -319,6 +425,41 @@ async def decide_proposal(
         case.status = "retailer_checks"
     elif payload.decision == "approved" and proposal.type == "request_information":
         case.status = "waiting_for_information"
+    elif payload.decision == "approved" and proposal.type == "triage_recommendation":
+        recommendation = proposal.payload["recommendation"]
+        case.status = (
+            "waiting_for_information"
+            if recommendation == "request_information"
+            else "under_review"
+        )
+    elif payload.decision == "approved" and proposal.type == "manufacturer_escalation_packet":
+        existing_escalation = db.scalar(
+            select(Escalation).where(Escalation.case_id == case.id)
+        )
+        if not existing_escalation:
+            packet = dict(proposal.payload["manufacturer_packet"])
+            if payload.notes:
+                packet["importer_notes"] = payload.notes
+            escalation = Escalation(
+                case_id=case.id,
+                manufacturer_id=proposal.payload["manufacturer_id"],
+                packet=packet,
+                approved_by_user_id=user.id,
+            )
+            db.add(escalation)
+            db.flush()
+            add_audit(
+                db,
+                case.id,
+                "manufacturer_escalation_sent",
+                user.id,
+                {
+                    "escalation_id": escalation.id,
+                    "manufacturer_id": escalation.manufacturer_id,
+                    "proposal_id": proposal.id,
+                },
+            )
+        case.status = "manufacturer_review"
     else:
         case.status = "under_review"
     add_audit(
@@ -330,5 +471,7 @@ async def decide_proposal(
     )
     db.commit()
     run = db.get(AgentRun, proposal.agent_run_id)
+    run.status = "completed"
+    db.commit()
     await resume_investigation(run.thread_id, payload.decision, payload.notes)
     return {"approval_id": approval.id, "decision": approval.decision, "idempotent": False}

@@ -40,6 +40,9 @@
 - [x] Implement a read-only MCP stdio server for cases, products, batches, related reports,
   shipments, and inspection findings.
 - [x] Implement the LangGraph investigation workflow.
+- [x] Split the workflow into triage, traceability, and escalation agents.
+- [x] Add structured results and per-agent MCP tool allowlists.
+- [x] Require a second importer approval for the escalation-agent evidence packet.
 - [x] Keep exact shipment matching deterministic and database-backed.
 - [x] Add an optional bounded Groq assessment with deterministic fallback.
 - [x] Store runs, proposals, confidence, evidence, and errors.
@@ -56,15 +59,17 @@
 
 ## Phase 6: responsive frontend
 
-- [ ] Create the React, TypeScript, Vite, and Tailwind application.
-- [ ] Generate or define a typed API client for `/api/v1`.
-- [ ] Build the public report and private tracking pages.
-- [ ] Build staff login and role-specific navigation.
-- [ ] Build importer dashboard, imports, case detail, agent trace, approvals, and timeline.
-- [ ] Build retailer complaint review, assigned inspection, evidence, and finding screens.
-- [ ] Build manufacturer escalation inbox and response screen.
-- [ ] Add loading, error, empty, and permission-denied states.
-- [ ] Verify keyboard use and mobile, tablet, and laptop layouts.
+- [x] Create the React, TypeScript, Vite, and Tailwind application.
+- [x] Define a typed API client for `/api/v1`.
+- [x] Build the public report form.
+- [x] Add the private tracking-token lookup screen.
+- [x] Build staff login and role-specific navigation.
+- [x] Build importer case detail, agent trace, approvals, and timeline.
+- [x] Build importer CSV import screens.
+- [x] Build retailer complaint review, assigned inspection, and finding screens.
+- [x] Build manufacturer escalation inbox and response screen.
+- [x] Add loading, error, and empty states.
+- [ ] Complete browser-based keyboard and viewport verification.
 
 ## Phase 7: Alternate Clouds deployment
 

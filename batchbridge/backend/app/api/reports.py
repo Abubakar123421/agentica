@@ -1,7 +1,7 @@
 import hashlib
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -11,6 +11,7 @@ from app.database import get_db
 from app.models import Case, Organization
 from app.schemas import ReportCreate, ReportCreated, TrackingView
 from app.security import token_hash
+from app.services.investigation import execute_investigation, queue_investigation
 
 router = APIRouter(tags=["public reports"])
 
@@ -20,7 +21,11 @@ def _public_id() -> str:
 
 
 @router.post("/reports", response_model=ReportCreated, status_code=status.HTTP_201_CREATED)
-def create_report(payload: ReportCreate, db: Session = Depends(get_db)):
+def create_report(
+    payload: ReportCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+):
     retailer_id = None
     if payload.retailer_code:
         retailer = db.scalar(
@@ -49,7 +54,9 @@ def create_report(payload: ReportCreate, db: Session = Depends(get_db)):
     db.add(case)
     db.flush()
     add_audit(db, case.id, "report_created", details={"source": "customer"})
+    run, _ = queue_investigation(db, case.id, "triage", None)
     db.commit()
+    background_tasks.add_task(execute_investigation, run.id)
     return ReportCreated(
         case_id=case.public_id,
         tracking_token=tracking_token,

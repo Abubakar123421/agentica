@@ -9,15 +9,20 @@ flowchart LR
     I[Importer portal] --> API
     M[Manufacturer portal] --> API
     API --> DB[(PostgreSQL)]
-    API --> LG[LangGraph investigation]
-    LG --> MCP[MCP evidence server]
+    API --> T[Triage agent]
+    API --> TR[Traceability agent]
+    API --> E[Escalation agent]
+    T --> MCP[MCP evidence server]
+    TR --> MCP
+    E --> MCP
     MCP --> DB
     LG -. optional summary .-> G[Groq API]
 ```
 
 The importer owns the application and source data. FastAPI is the authorization and mutation
-boundary. LangGraph coordinates investigation steps. The MCP server exposes read-only evidence
-tools, and PostgreSQL remains the source of truth.
+boundary. LangGraph runs three bounded agents with human gates between stages. The shared MCP server
+exposes read-only evidence tools with per-agent allowlists, and PostgreSQL remains the source of
+truth.
 
 ## Components
 
@@ -27,7 +32,8 @@ tools, and PostgreSQL remains the source of truth.
 | Route modules | `backend/app/api/` | Authentication, reports, cases, imports, evidence, inspections, escalations |
 | Domain models | `backend/app/models.py` | Persistent entities and constraints |
 | Investigation service | `backend/app/services/investigation.py` | Executes and stores background investigation runs |
-| Workflow | `backend/app/services/workflow.py` | LangGraph nodes, deterministic evidence assessment, optional Groq summary |
+| Agents | `backend/app/agents/` | Triage, exact-batch traceability, escalation packet, structured outputs |
+| Workflow | `backend/app/services/workflow.py` | Routes one bounded agent run to an explicit human interrupt |
 | MCP client | `backend/app/services/mcp_client.py` | Calls the local MCP evidence tools |
 | MCP server | `backend/app/mcp_server.py` | Read-only case, product, batch, shipment, related report, and finding tools |
 | Audit service | `backend/app/audit.py` | Append-only case events |
@@ -51,7 +57,7 @@ sequenceDiagram
     participant U as Customer or retailer
     participant A as API
     participant H as Importer investigator
-    participant L as LangGraph
+    participant L as Selected LangGraph agent
     participant T as MCP tools
     participant D as PostgreSQL
 

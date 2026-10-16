@@ -1,8 +1,8 @@
 # BatchBridge
 
 BatchBridge is an importer-owned food batch investigation system. Consumers and retailer food
-safety managers report suspected product issues. An MCP-grounded LangGraph workflow traces the
-batch through importer shipment records and drafts retailer inspection tasks. Humans approve every
+safety managers report suspected product issues. Three MCP-grounded LangGraph agents triage the
+report, trace the exact batch, and prepare manufacturer escalation evidence. Humans approve every
 handoff and safety decision.
 
 ## Backend quick start
@@ -25,6 +25,17 @@ Open `http://localhost:8000/docs`. Demo data is seeded by default. Accounts use 
 - `retailer-c@batchbridge.demo`
 - `manufacturer@batchbridge.demo`
 
+## Frontend quick start
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Vite proxies `/api` and `/health` to `http://127.0.0.1:8000`. The production Docker image builds the
+responsive React application and serves it from the FastAPI origin.
+
 ## Verification
 
 ```bash
@@ -45,13 +56,13 @@ The container listens on `0.0.0.0:$PORT`. All durable state is stored in Postgre
 - Consumers submit reports directly and receive a private tracking token.
 - Retailer safety managers can file their own report, review and forward customer cases, add
   evidence, and complete assigned checks.
-- The LangGraph workflow calls the read-only MCP evidence server for case, product, batch,
-  distribution, related report, and inspection facts.
+- Triage, traceability, and escalation agents share one read-only MCP evidence server with explicit
+  per-agent tool permissions.
 - Groq adds a bounded risk summary and follow-up questions when configured. The database remains the
   source of truth if Groq is unavailable.
 - Importer approval creates retailer tasks; no tool or model can create them before that approval.
-- Manufacturer escalation requires an approved batch proposal and at least one human retailer
-  finding. The importer makes the final case decision.
+- Manufacturer escalation requires an approved traceability proposal, at least one human retailer
+  finding, an escalation-agent packet, and a second importer approval.
 
 The interactive OpenAPI contract at `/docs` covers the full API.
 

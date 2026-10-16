@@ -5,12 +5,16 @@ from sqlalchemy import func, or_, select
 
 from app.database import SessionLocal
 from app.models import (
+    Approval,
+    AuditEvent,
     Batch,
     Case,
+    Evidence,
     Inspection,
     Organization,
     Product,
     ProductAlias,
+    Proposal,
     Shipment,
 )
 
@@ -176,6 +180,30 @@ def get_batch_shipments(batch_id: str) -> list[dict]:
 
 
 @mcp.tool()
+def get_non_recipient_retailers(batch_id: str) -> list[dict]:
+    """List retailers excluded because no shipment for the exact batch exists."""
+    with SessionLocal() as db:
+        recipient_ids = select(Shipment.retailer_id).where(Shipment.batch_id == batch_id)
+        retailers = db.scalars(
+            select(Organization)
+            .where(
+                Organization.type == "retailer",
+                Organization.id.not_in(recipient_ids),
+            )
+            .order_by(Organization.code)
+        ).all()
+        return [
+            {
+                "retailer_id": retailer.id,
+                "retailer_code": retailer.code,
+                "retailer_name": retailer.name,
+                "reason": "No shipment record exists for this exact product and batch.",
+            }
+            for retailer in retailers
+        ]
+
+
+@mcp.tool()
 def get_inspection_findings(case_id: str) -> list[dict]:
     """Return submitted retailer findings for a case."""
     with SessionLocal() as db:
@@ -200,6 +228,98 @@ def get_inspection_findings(case_id: str) -> list[dict]:
             }
             for inspection, retailer in rows
         ]
+
+
+@mcp.tool()
+def get_approved_traceability(case_id: str) -> dict:
+    """Return the latest human-approved product and batch trace for a case."""
+    with SessionLocal() as db:
+        row = db.execute(
+            select(Proposal, Approval)
+            .join(Approval, Approval.proposal_id == Proposal.id)
+            .where(
+                Proposal.case_id == case_id,
+                Proposal.type == "retailer_inspections",
+                Proposal.status == "approved",
+                Approval.decision == "approved",
+            )
+            .order_by(Proposal.version.desc())
+        ).first()
+        if not row:
+            return {"found": False, "case_id": case_id}
+        proposal, approval = row
+        return {
+            "found": True,
+            "proposal_id": proposal.id,
+            "proposal_version": proposal.version,
+            "approved_at": approval.created_at.isoformat(),
+            "product": proposal.payload["product"],
+            "batch": proposal.payload["batch"],
+        }
+
+
+@mcp.tool()
+def get_case_evidence_metadata(case_id: str) -> list[dict]:
+    """Return evidence provenance without returning file content or reporter details."""
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(Evidence).where(Evidence.case_id == case_id).order_by(Evidence.created_at)
+        ).all()
+        return [
+            {
+                "id": item.id,
+                "filename": item.filename,
+                "content_type": item.content_type,
+                "sha256": item.sha256,
+                "source": "staff" if item.uploaded_by_user_id else "customer",
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in rows
+        ]
+
+
+@mcp.tool()
+def get_case_timeline(case_id: str) -> list[dict]:
+    """Return event provenance without actor contact details."""
+    with SessionLocal() as db:
+        rows = db.scalars(
+            select(AuditEvent)
+            .where(AuditEvent.case_id == case_id)
+            .order_by(AuditEvent.created_at)
+        ).all()
+        return [
+            {
+                "id": item.id,
+                "event_type": item.event_type,
+                "actor_user_id": item.actor_user_id,
+                "created_at": item.created_at.isoformat(),
+            }
+            for item in rows
+        ]
+
+
+@mcp.tool()
+def get_distribution_summary(batch_id: str) -> dict:
+    """Calculate received, shipped, retained, and recipient totals for an exact batch."""
+    with SessionLocal() as db:
+        batch = db.get(Batch, batch_id)
+        if not batch:
+            return {"found": False, "batch_id": batch_id}
+        quantity_shipped, recipient_count = db.execute(
+            select(
+                func.coalesce(func.sum(Shipment.quantity), 0),
+                func.count(func.distinct(Shipment.retailer_id)),
+            ).where(Shipment.batch_id == batch_id)
+        ).one()
+        shipped = int(quantity_shipped or 0)
+        return {
+            "found": True,
+            "batch_id": batch.id,
+            "quantity_received": batch.quantity_received,
+            "quantity_shipped": shipped,
+            "quantity_retained": batch.quantity_received - shipped,
+            "recipient_count": int(recipient_count or 0),
+        }
 
 
 if __name__ == "__main__":

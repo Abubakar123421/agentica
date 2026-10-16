@@ -43,6 +43,7 @@ Browser clients must send cookies on authenticated requests.
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `POST` | `/api/v1/cases/officer-report` | Create a case from a retailer inspection |
+| `POST` | `/api/v1/cases/{case_id}/triage` | Run or retrieve the bounded triage agent |
 | `POST` | `/api/v1/cases/{case_id}/retailer-review` | Review and forward or hold a customer report |
 | `GET` | `/api/v1/inspections` | List inspections assigned to the signed-in retailer |
 | `POST` | `/api/v1/inspections/{inspection_id}/finding` | Submit a human stock-check finding |
@@ -55,13 +56,14 @@ Browser clients must send cookies on authenticated requests.
 | `POST` | `/api/v1/imports/batches` | Validate and import batch records |
 | `POST` | `/api/v1/imports/shipments` | Validate and import shipment records |
 | `PATCH` | `/api/v1/cases/{case_id}/status` | Update case status or final human verdict |
-| `POST` | `/api/v1/cases/{case_id}/analysis` | Queue an MCP-grounded investigation |
+| `POST` | `/api/v1/cases/{case_id}/analysis` | Queue the MCP-grounded traceability agent |
+| `POST` | `/api/v1/cases/{case_id}/escalation-analysis` | Queue the escalation agent after a human finding |
 | `GET` | `/api/v1/cases/{case_id}/analysis/{run_id}` | Poll investigation status and result |
 | `POST` | `/api/v1/cases/{case_id}/approvals` | Approve or reject an agent proposal |
-| `POST` | `/api/v1/escalations/cases/{case_id}` | Send an approved evidence packet to the manufacturer |
+| `POST` | `/api/v1/escalations/cases/{case_id}` | Idempotently retrieve or create from an approved escalation proposal |
 
-Manufacturer escalation is rejected unless the case has an approved batch proposal and at least one
-completed retailer finding.
+Manufacturer escalation requires an approved traceability proposal, at least one completed retailer
+finding, and importer approval of the escalation-agent packet.
 
 ## Manufacturer endpoints
 
@@ -79,6 +81,11 @@ The stdio server in `backend/app/mcp_server.py` exposes these read-only tools:
 - `get_batch(product_id, batch_number)`
 - `find_related_reports(product_id, batch_number, exclude_case_id)`
 - `get_batch_shipments(batch_id)`
+- `get_non_recipient_retailers(batch_id)`
 - `get_inspection_findings(case_id)`
+- `get_approved_traceability(case_id)`
+- `get_case_evidence_metadata(case_id)`
+- `get_case_timeline(case_id)`
+- `get_distribution_summary(batch_id)`
 
 Tool output preserves database identifiers. Reporter contact details are intentionally absent.

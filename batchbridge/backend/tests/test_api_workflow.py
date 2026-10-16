@@ -39,6 +39,13 @@ def test_complete_human_approved_batch_investigation(client, login_user):
         for item in client.get("/api/v1/cases").json()
         if item["public_id"] == report.json()["case_id"]
     )
+    triage_detail = client.get(f"/api/v1/cases/{retailer_case['id']}").json()
+    triage_run = next(
+        item for item in triage_detail["agent_runs"] if item["agent_type"] == "triage"
+    )
+    assert triage_run["status"] == "awaiting_human"
+    assert triage_run["result"]["type"] == "triage_recommendation"
+    assert triage_run["result"]["recommendation"] == "retailer_review"
     retailer_review = client.post(
         f"/api/v1/cases/{retailer_case['id']}/retailer-review",
         json={
@@ -89,6 +96,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
         "RETAILER-B",
         "RETAILER-C",
     ]
+    assert [row["retailer_code"] for row in proposal["excluded_retailers"]] == ["RETAILER-D"]
 
     _logout(client)
     login_user(client, "retailer-a@batchbridge.demo")
@@ -115,6 +123,8 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert repeat.json()["idempotent"] is True
     detail = client.get(f"/api/v1/cases/{case['id']}").json()
     assert any(event["event_type"] == "retailer_review_submitted" for event in detail["timeline"])
+    blocked_escalation = client.post(f"/api/v1/cases/{case['id']}/escalation-analysis")
+    assert blocked_escalation.status_code == 409
 
     _logout(client)
     login_user(client, "retailer-a@batchbridge.demo")
@@ -132,11 +142,41 @@ def test_complete_human_approved_batch_investigation(client, login_user):
 
     _logout(client)
     login_user(client, "importer@batchbridge.demo")
-    escalation = client.post(
-        f"/api/v1/escalations/cases/{case['id']}",
-        json={"notes": "Please investigate production and ingredient records for lot 38."},
+    escalation_start = client.post(f"/api/v1/cases/{case['id']}/escalation-analysis")
+    assert escalation_start.status_code == 202, escalation_start.text
+    escalation_run_id = escalation_start.json()["run_id"]
+    for _ in range(100):
+        escalation_analysis = client.get(
+            f"/api/v1/cases/{case['id']}/analysis/{escalation_run_id}"
+        )
+        assert escalation_analysis.status_code == 200
+        if escalation_analysis.json()["status"] in {"awaiting_human", "failed"}:
+            break
+        time.sleep(0.05)
+    assert escalation_analysis.json()["status"] == "awaiting_human", escalation_analysis.json()
+    escalation_proposal = escalation_analysis.json()["result"]
+    assert escalation_proposal["type"] == "manufacturer_escalation_packet"
+    assert escalation_proposal["completed_inspections"] == 1
+    assert escalation_proposal["recommendation"] == "prepare_manufacturer_escalation"
+    assert any(
+        call["tool"] == "get_inspection_findings"
+        for call in escalation_proposal["tool_calls"]
     )
-    assert escalation.status_code == 201, escalation.text
+    assert {call["tool"] for call in escalation_proposal["tool_calls"]} >= {
+        "get_distribution_summary",
+        "get_case_timeline",
+    }
+    assert "customer@example.com" not in str(escalation_proposal)
+
+    escalation_approval = client.post(
+        f"/api/v1/cases/{case['id']}/approvals",
+        json={
+            "proposal_id": escalation_analysis.json()["proposal_id"],
+            "decision": "approved",
+            "notes": "Please investigate production and ingredient records for lot 38.",
+        },
+    )
+    assert escalation_approval.status_code == 200, escalation_approval.text
 
     _logout(client)
     login_user(client, "manufacturer@batchbridge.demo")
@@ -188,6 +228,15 @@ def test_unknown_batch_requests_human_information_followup(client, login_user):
         for item in client.get("/api/v1/cases").json()
         if item["public_id"] == report.json()["case_id"]
     )
+    triage = client.get(f"/api/v1/cases/{case['id']}").json()
+    triage_proposal = next(
+        item for item in triage["proposals"] if item["type"] == "triage_recommendation"
+    )
+    triage_approval = client.post(
+        f"/api/v1/cases/{case['id']}/approvals",
+        json={"proposal_id": triage_proposal["id"], "decision": "approved"},
+    )
+    assert triage_approval.status_code == 200, triage_approval.text
     start = client.post(f"/api/v1/cases/{case['id']}/analysis")
     run_id = start.json()["run_id"]
     for _ in range(100):
@@ -198,3 +247,25 @@ def test_unknown_batch_requests_human_information_followup(client, login_user):
     assert result["status"] == "awaiting_human", result
     assert result["result"]["type"] == "request_information"
     assert "batch_number" in result["result"]["missing"]
+
+
+def test_traceability_requires_triage_human_approval(client, login_user):
+    report = client.post(
+        "/api/v1/reports",
+        json={
+            "retailer_code": "RETAILER-A",
+            "product_name": "SweetCo Alpine Milk Chocolate 100g",
+            "batch_number": "38",
+            "description": "The package appears damaged and I want it reviewed.",
+        },
+    )
+    assert report.status_code == 201
+    login_user(client, "importer@batchbridge.demo")
+    case = next(
+        item
+        for item in client.get("/api/v1/cases").json()
+        if item["public_id"] == report.json()["case_id"]
+    )
+    response = client.post(f"/api/v1/cases/{case['id']}/analysis")
+    assert response.status_code == 409
+    assert "triage approval" in response.json()["detail"]

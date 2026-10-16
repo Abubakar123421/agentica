@@ -37,10 +37,11 @@ visual inspection never clears an entire batch. Urgent escalation does not wait 
 ## Technical decisions
 
 - API: Python 3.12, FastAPI, SQLAlchemy, Alembic.
-- Workflow: LangGraph with an explicit human interrupt.
+- Workflow: three bounded LangGraph agents for triage, traceability, and escalation, each ending at
+  an explicit human interrupt.
 - Model: Groq `openai/gpt-oss-20b`, configurable with `GROQ_MODEL`.
-- Tools: a real MCP stdio server for read-only case, product, batch, shipment, report, and inspection
-  lookups.
+- Tools: one real MCP stdio server with read-only case, product, batch, shipment, report, evidence,
+  approval, timeline, and inspection lookups. Each agent has a strict tool allowlist.
 - Database: PostgreSQL 17 on Alternate Clouds; SQLite is supported for local development and tests.
 - Authentication: seeded password-protected staff accounts, server-side sessions, fixed roles and
   organizations, no public signup.

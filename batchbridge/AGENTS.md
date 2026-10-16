@@ -15,6 +15,7 @@
 ## Repository layout
 
 - `backend/app/api/`: HTTP routes and role boundaries.
+- `backend/app/agents/`: triage, traceability, escalation, and their structured result contracts.
 - `backend/app/services/`: workflow, investigation execution, and MCP client.
 - `backend/app/mcp_server.py`: read-only evidence tools.
 - `backend/app/models.py`: SQLAlchemy domain model.

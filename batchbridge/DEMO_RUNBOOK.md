@@ -31,12 +31,13 @@ All seeded accounts use the deployed `DEMO_PASSWORD`.
 3. Sign in as the relevant retailer safety manager, inspect the complaint, add notes or evidence,
    and forward it to the importer.
 4. Sign in as the importer and open the case timeline.
-5. Start the investigation and show the agent run steps.
-6. Show the MCP evidence: matched product, exact lot, related reports, and shipment recipients.
+5. Show the completed Triage Agent result, then start the Traceability Agent.
+6. Show the MCP evidence: matched product, exact lot, related reports, shipment recipients, and
+   explicitly excluded retailers.
 7. Point out that Retailer D is absent because it received lot `39`.
 8. Approve the proposal as the importer. Confirm that inspection tasks are created only now.
 9. Sign in as one assigned retailer and submit a human finding.
-10. Return as the importer and approve manufacturer escalation.
+10. Return as the importer, run the Escalation Agent, preview its packet, and approve escalation.
 11. Sign in as the manufacturer, review the packet, and submit a response.
 12. Return as the importer, record the final verdict, and close the case.
 13. Show the complete audit timeline and the public tracking update.

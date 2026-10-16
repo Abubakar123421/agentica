@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.audit import add_audit
 from app.database import get_db
 from app.dependencies import require_roles
-from app.models import Case, Escalation, Evidence, Inspection, Proposal, User
+from app.models import Case, Escalation, Proposal, User
 from app.schemas import EscalationCreate, ManufacturerResponseCreate
 
 router = APIRouter(prefix="/escalations", tags=["manufacturer escalations"])
@@ -30,53 +30,22 @@ def create_escalation(
         select(Proposal)
         .where(
             Proposal.case_id == case.id,
-            Proposal.type == "retailer_inspections",
+            Proposal.type == "manufacturer_escalation_packet",
             Proposal.status == "approved",
         )
         .order_by(Proposal.version.desc())
     )
     if not proposal:
-        raise HTTPException(status_code=409, detail="An approved batch proposal is required")
-    findings = db.scalars(
-        select(Inspection).where(
-            Inspection.case_id == case.id,
-            Inspection.status == "completed",
+        raise HTTPException(
+            status_code=409,
+            detail="An approved escalation-agent proposal is required",
         )
-    ).all()
-    if not findings:
-        raise HTTPException(status_code=409, detail="At least one retailer finding is required")
-    evidence = db.scalars(select(Evidence).where(Evidence.case_id == case.id)).all()
-    product = proposal.payload["product"]
-    packet = {
-        "case_public_id": case.public_id,
-        "product": product,
-        "batch": proposal.payload["batch"],
-        "distribution": proposal.payload.get("retailers", []),
-        "findings": [
-            {
-                "retailer_id": finding.retailer_id,
-                "finding": finding.finding,
-                "notes": finding.notes,
-                "completed_at": (
-                    finding.completed_at.isoformat() if finding.completed_at else None
-                ),
-            }
-            for finding in findings
-        ],
-        "evidence": [
-            {
-                "id": item.id,
-                "filename": item.filename,
-                "content_type": item.content_type,
-                "sha256": item.sha256,
-            }
-            for item in evidence
-        ],
-        "importer_notes": payload.notes,
-    }
+    packet = dict(proposal.payload["manufacturer_packet"])
+    if payload.notes:
+        packet["importer_notes"] = payload.notes
     escalation = Escalation(
         case_id=case.id,
-        manufacturer_id=product["manufacturer"]["id"],
+        manufacturer_id=proposal.payload["manufacturer_id"],
         packet=packet,
         approved_by_user_id=user.id,
     )

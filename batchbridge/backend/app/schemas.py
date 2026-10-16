@@ -70,6 +70,7 @@ class OfficerReportCreate(BaseModel):
 class AnalysisStartResponse(BaseModel):
     run_id: str
     status: str
+    agent_type: Literal["triage", "traceability", "escalation"]
 
 
 class ApprovalRequest(BaseModel):
