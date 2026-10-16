@@ -1,0 +1,200 @@
+import time
+
+
+def _logout(client):
+    response = client.post("/api/v1/auth/logout")
+    assert response.status_code == 204
+
+
+def test_complete_human_approved_batch_investigation(client, login_user):
+    report = client.post(
+        "/api/v1/reports",
+        json={
+            "reporter_name": "Demo Customer",
+            "reporter_email": "customer@example.com",
+            "retailer_code": "RETAILER-A",
+            "product_name": "SweetCo Alpine Milk Chocolate 100g",
+            "batch_number": "38",
+            "purchase_date": "2026-10-15",
+            "description": "The sealed chocolate had an unusual smell and visible discoloration.",
+        },
+    )
+    assert report.status_code == 201, report.text
+    tracking_token = report.json()["tracking_token"]
+    evidence_content = b"fictional package photo bytes"
+    evidence = client.post(
+        f"/api/v1/reports/{report.json()['case_id']}/evidence",
+        params={"tracking_token": tracking_token},
+        files={"file": ("package.png", evidence_content, "image/png")},
+    )
+    assert evidence.status_code == 201, evidence.text
+
+    tracked = client.get(f"/api/v1/tracking/{tracking_token}")
+    assert tracked.status_code == 200
+    assert tracked.json()["status"] == "new_report"
+
+    login_user(client, "retailer-a@batchbridge.demo")
+    retailer_case = next(
+        item
+        for item in client.get("/api/v1/cases").json()
+        if item["public_id"] == report.json()["case_id"]
+    )
+    retailer_review = client.post(
+        f"/api/v1/cases/{retailer_case['id']}/retailer-review",
+        json={
+            "decision": "forwarded",
+            "notes": "Customer package and lot photo reviewed; forwarding for importer trace.",
+        },
+    )
+    assert retailer_review.status_code == 200, retailer_review.text
+    assert retailer_review.json()["idempotent"] is False
+    repeated_review = client.post(
+        f"/api/v1/cases/{retailer_case['id']}/retailer-review",
+        json={"decision": "forwarded", "notes": "Repeated submission."},
+    )
+    assert repeated_review.json()["idempotent"] is True
+
+    _logout(client)
+    login_user(client, "retailer-b@batchbridge.demo")
+    forbidden_review = client.post(
+        f"/api/v1/cases/{retailer_case['id']}/retailer-review",
+        json={"decision": "forwarded", "notes": "Wrong retailer attempt."},
+    )
+    assert forbidden_review.status_code == 404
+
+    _logout(client)
+    login_user(client, "importer@batchbridge.demo")
+    cases = client.get("/api/v1/cases")
+    assert cases.status_code == 200
+    case = next(item for item in cases.json() if item["public_id"] == report.json()["case_id"])
+
+    start = client.post(f"/api/v1/cases/{case['id']}/analysis")
+    assert start.status_code == 202, start.text
+    run_id = start.json()["run_id"]
+
+    analysis = None
+    for _ in range(100):
+        analysis = client.get(f"/api/v1/cases/{case['id']}/analysis/{run_id}")
+        assert analysis.status_code == 200
+        if analysis.json()["status"] in {"awaiting_human", "failed"}:
+            break
+        time.sleep(0.05)
+    assert analysis.json()["status"] == "awaiting_human", analysis.json()
+    proposal = analysis.json()["result"]
+    assert proposal["type"] == "retailer_inspections"
+    assert proposal["batch"]["quantity_received"] == 10_000
+    assert proposal["batch"]["quantity_retained"] == 4_000
+    assert [row["retailer_code"] for row in proposal["retailers"]] == [
+        "RETAILER-A",
+        "RETAILER-B",
+        "RETAILER-C",
+    ]
+
+    _logout(client)
+    login_user(client, "retailer-a@batchbridge.demo")
+    assert all(item["case_id"] != case["id"] for item in client.get("/api/v1/inspections").json())
+    _logout(client)
+    login_user(client, "importer@batchbridge.demo")
+
+    approval = client.post(
+        f"/api/v1/cases/{case['id']}/approvals",
+        json={
+            "proposal_id": analysis.json()["proposal_id"],
+            "decision": "approved",
+            "notes": "Shipment evidence verified by importer investigator.",
+        },
+    )
+    assert approval.status_code == 200, approval.text
+    repeat = client.post(
+        f"/api/v1/cases/{case['id']}/approvals",
+        json={
+            "proposal_id": analysis.json()["proposal_id"],
+            "decision": "approved",
+        },
+    )
+    assert repeat.json()["idempotent"] is True
+    detail = client.get(f"/api/v1/cases/{case['id']}").json()
+    assert any(event["event_type"] == "retailer_review_submitted" for event in detail["timeline"])
+
+    _logout(client)
+    login_user(client, "retailer-a@batchbridge.demo")
+    inspections = client.get("/api/v1/inspections")
+    assert inspections.status_code == 200
+    inspection = next(item for item in inspections.json() if item["case_id"] == case["id"])
+    finding = client.post(
+        f"/api/v1/inspections/{inspection['id']}/finding",
+        json={
+            "finding": "issue_observed",
+            "notes": "Food safety manager isolated one matching bar with the same visible issue.",
+        },
+    )
+    assert finding.status_code == 200, finding.text
+
+    _logout(client)
+    login_user(client, "importer@batchbridge.demo")
+    escalation = client.post(
+        f"/api/v1/escalations/cases/{case['id']}",
+        json={"notes": "Please investigate production and ingredient records for lot 38."},
+    )
+    assert escalation.status_code == 201, escalation.text
+
+    _logout(client)
+    login_user(client, "manufacturer@batchbridge.demo")
+    assert client.get("/api/v1/cases").status_code == 403
+    inbox = client.get("/api/v1/escalations")
+    assert inbox.status_code == 200
+    manufacturer_case = next(item for item in inbox.json() if item["case_id"] == case["id"])
+    assert "reporter_email" not in str(manufacturer_case["packet"])
+    packet_evidence = manufacturer_case["packet"]["evidence"]
+    assert packet_evidence[0]["filename"] == "package.png"
+    evidence_download = client.get(f"/api/v1/evidence/{packet_evidence[0]['id']}")
+    assert evidence_download.status_code == 200
+    assert evidence_download.content == evidence_content
+    response = client.post(
+        f"/api/v1/escalations/{manufacturer_case['id']}/response",
+        json={
+            "response": "Lot 38 is under internal investigation; distribution hold acknowledged."
+        },
+    )
+    assert response.status_code == 200, response.text
+
+    _logout(client)
+    login_user(client, "importer@batchbridge.demo")
+    closed = client.patch(
+        f"/api/v1/cases/{case['id']}/status",
+        json={"status": "closed", "safety_verdict": "confirmed"},
+    )
+    assert closed.status_code == 200
+
+    final_tracking = client.get(f"/api/v1/tracking/{tracking_token}")
+    assert final_tracking.json()["status"] == "closed"
+    assert final_tracking.json()["safety_verdict"] == "confirmed"
+
+
+def test_unknown_batch_requests_human_information_followup(client, login_user):
+    report = client.post(
+        "/api/v1/reports",
+        json={
+            "product_name": "SweetCo Alpine Milk Chocolate 100g",
+            "description": (
+                "The package was damaged, but I cannot read the manufacturer lot number."
+            ),
+        },
+    )
+    assert report.status_code == 201
+    login_user(client, "importer@batchbridge.demo")
+    case = next(
+        item
+        for item in client.get("/api/v1/cases").json()
+        if item["public_id"] == report.json()["case_id"]
+    )
+    start = client.post(f"/api/v1/cases/{case['id']}/analysis")
+    run_id = start.json()["run_id"]
+    for _ in range(100):
+        result = client.get(f"/api/v1/cases/{case['id']}/analysis/{run_id}").json()
+        if result["status"] in {"awaiting_human", "failed"}:
+            break
+        time.sleep(0.05)
+    assert result["status"] == "awaiting_human", result
+    assert result["result"]["type"] == "request_information"
+    assert "batch_number" in result["result"]["missing"]
