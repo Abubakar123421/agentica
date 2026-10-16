@@ -51,6 +51,7 @@ class CaseSummary(ApiModel):
     id: str
     public_id: str
     source: str
+    reporter_name: str | None
     product_name: str
     batch_number: str | None
     status: str

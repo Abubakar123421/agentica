@@ -1,3 +1,5 @@
+import csv
+import io
 import time
 
 
@@ -211,6 +213,25 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert inbox.status_code == 200
     manufacturer_case = next(item for item in inbox.json() if item["case_id"] == case["id"])
     assert "reporter_email" not in str(manufacturer_case["packet"])
+    csv_report = client.get(
+        f"/api/v1/escalations/{manufacturer_case['id']}/report.csv"
+    )
+    assert csv_report.status_code == 200
+    assert "text/csv" in csv_report.headers["content-type"]
+    assert "manufacturer-report.csv" in csv_report.headers["content-disposition"]
+    report_rows = list(csv.DictReader(io.StringIO(csv_report.text.lstrip("\ufeff"))))
+    assert any(
+        row["Section"] == "Distribution"
+        and row["Retailer"] == "CityMart Islamabad"
+        and row["Quantity"] == "3000"
+        for row in report_rows
+    )
+    assert any(
+        row["Section"] == "Retailer finding"
+        and row["Status"] == "Issue Observed"
+        for row in report_rows
+    )
+    assert "customer@example.com" not in csv_report.text
     packet_evidence = manufacturer_case["packet"]["evidence"]
     assert packet_evidence[0]["filename"] == "package.png"
     evidence_download = client.get(f"/api/v1/evidence/{packet_evidence[0]['id']}")

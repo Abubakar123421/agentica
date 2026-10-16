@@ -10,6 +10,7 @@ export type CaseSummary = {
   id: string;
   public_id: string;
   source: string;
+  reporter_name: string | null;
   product_name: string;
   batch_number: string | null;
   status: string;

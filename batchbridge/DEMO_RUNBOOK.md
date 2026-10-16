@@ -13,6 +13,9 @@ investigation while AI gathers evidence and humans control every safety action.
 - Retailer A received 3,000, Retailer B received 2,000, and Retailer C received 1,000.
 - The importer retained 4,000.
 - Retailer D received only lot `39` and must not be included in lot `38` tasks.
+- Eight fictional, named lot `38` complaints (`BB-DEMO-001` through `BB-DEMO-008`) are seeded
+  idempotently across Retailers A, B, and C. They are already officer-forwarded and ready for the
+  importer to run **Review report**. Restarting the app does not duplicate them.
 
 ## Accounts
 
@@ -52,6 +55,9 @@ their stored password hashes must also be updated. Never commit `.env` or databa
     Approve a manufacturer packet only if recommended; follow-up checks reopen selected tasks,
     and monitoring sends no packet. Complete additional checks if requested, then rerun escalation.
 11. Sign in as the manufacturer, review the packet, and submit a response.
+    Use **Download CSV** to show the same approved packet as a plain-language spreadsheet with
+    product, lot, shipments, human findings, evidence filenames, and requested actions. Raw JSON is
+    available only under **Technical details**.
 12. Return as the importer, record the final verdict, and close the case.
 13. Show the complete audit timeline and the public tracking update.
 

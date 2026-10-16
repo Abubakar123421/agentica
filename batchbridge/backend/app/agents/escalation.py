@@ -46,6 +46,10 @@ async def run_escalation_agent(
     if followup_ids and not observed:
         recommendation = "request_more_retailer_checks"
 
+    manufacturer_questions = [
+        f"Review production and ingredient records for lot {batch['batch_number']}.",
+        "Report any matching complaints or internal quality deviations.",
+    ]
     packet = {
         "case_public_id": case["public_id"],
         "product": product,
@@ -60,6 +64,7 @@ async def run_escalation_agent(
             "pending_inspections": len(pending),
             "conflicting_findings": bool(conflicts),
         },
+        "requested_actions": manufacturer_questions,
     }
     ai_assessment = None
     return EscalationResult(
@@ -80,10 +85,7 @@ async def run_escalation_agent(
         affected_quantity=distribution["quantity_shipped"],
         checked_quantity=None,
         missing_evidence=missing,
-        manufacturer_questions=[
-            f"Review production and ingredient records for lot {batch['batch_number']}.",
-            "Report any matching complaints or internal quality deviations.",
-        ],
+        manufacturer_questions=manufacturer_questions,
         recommendation=recommendation,
         manufacturer_id=product["manufacturer"]["id"],
         manufacturer_packet=packet,

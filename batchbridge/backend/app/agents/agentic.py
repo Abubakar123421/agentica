@@ -168,6 +168,7 @@ def finalize_escalation(decision: EscalationDecision, ledger: EvidenceLedger) ->
             "pending_inspections": len(pending),
             "conflicting_findings": bool(conflicts),
         },
+        "requested_actions": decision.manufacturer_questions,
     }
     return EscalationResult(
         type={

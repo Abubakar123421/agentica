@@ -128,6 +128,13 @@ Two generated fictional photos are in `examples/demo-evidence/`.
 
 Seeded logins: `importer@batchbridge.demo`, `retailer-a@batchbridge.demo`,
 `retailer-b@batchbridge.demo`, `retailer-c@batchbridge.demo`, `manufacturer@batchbridge.demo`.
+Eight stable fictional complaints (`BB-DEMO-001` through `BB-DEMO-008`) are added idempotently when
+demo seeding is enabled. Each has a named reporter, retailer, lot `38`, distinct complaint text, and
+an officer-forwarded review so it can enter the importer workflow without repeating retailer intake.
+Manufacturer packets render as plain-language sections and tables. After importer approval, the
+manufacturer and importer can download a UTF-8 CSV report from the scoped escalation endpoint. The
+CSV contains product/lot identity, distribution, human findings, evidence metadata, requested
+actions, and importer notes; customer contact data remains excluded.
 Passwords come from `DEMO_PASSWORD`; production credentials must be set through deployment secrets.
 All five local demo account hashes were synchronized with the current ignored `.env` value.
 Login validates a non-empty password rather than imposing a password-creation length rule;

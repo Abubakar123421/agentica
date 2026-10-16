@@ -3,9 +3,19 @@ from datetime import date, datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.audit import add_audit
 from app.config import get_settings
-from app.models import Batch, Organization, Product, ProductAlias, Shipment, User
-from app.security import hash_password
+from app.models import (
+    Batch,
+    Case,
+    Organization,
+    Product,
+    ProductAlias,
+    RetailerReview,
+    Shipment,
+    User,
+)
+from app.security import hash_password, token_hash
 
 DEMO_ORGANIZATIONS = [
     ("IMPORTER-PK", "Pak Continental Imports", "importer"),
@@ -16,9 +26,133 @@ DEMO_ORGANIZATIONS = [
     ("SWEETCO-DE", "SweetCo GmbH", "manufacturer"),
 ]
 
+DEMO_COMPLAINTS = [
+    (
+        "BB-DEMO-001",
+        "Amina Yusuf",
+        "RETAILER-A",
+        date(2026, 10, 11),
+        "White powdery marks appeared on two sealed chocolate bars from lot 38.",
+    ),
+    (
+        "BB-DEMO-002",
+        "Omar Farooq",
+        "RETAILER-B",
+        date(2026, 10, 12),
+        "The chocolate had an unusual sour smell immediately after opening the wrapper.",
+    ),
+    (
+        "BB-DEMO-003",
+        "Sara Khan",
+        "RETAILER-C",
+        date(2026, 10, 12),
+        "The inner foil was torn even though the outside package looked sealed.",
+    ),
+    (
+        "BB-DEMO-004",
+        "Bilal Ahmed",
+        "RETAILER-A",
+        date(2026, 10, 13),
+        "A chocolate bar from lot 38 tasted unusually bitter and was not consumed further.",
+    ),
+    (
+        "BB-DEMO-005",
+        "Hina Malik",
+        "RETAILER-B",
+        date(2026, 10, 13),
+        "The wrapper looked swollen and released air when the package was opened.",
+    ),
+    (
+        "BB-DEMO-006",
+        "Zain Ali",
+        "RETAILER-C",
+        date(2026, 10, 14),
+        "Grey discoloration was visible across several squares of the chocolate bar.",
+    ),
+    (
+        "BB-DEMO-007",
+        "Mariam Noor",
+        "RETAILER-A",
+        date(2026, 10, 14),
+        "The bar appeared melted and hardened again despite normal home storage.",
+    ),
+    (
+        "BB-DEMO-008",
+        "Danish Iqbal",
+        "RETAILER-B",
+        date(2026, 10, 15),
+        "Small dark particles were visible on the surface after opening the sealed pack.",
+    ),
+]
+
+
+def seed_demo_complaints(db: Session) -> int:
+    """Add stable fictional complaints without duplicating them on restart."""
+    organizations = {
+        organization.code: organization
+        for organization in db.scalars(select(Organization)).all()
+    }
+    reviewers = {
+        user.organization_id: user
+        for user in db.scalars(
+            select(User).where(User.role == "retailer_safety_manager")
+        ).all()
+    }
+    if not organizations or not reviewers:
+        return 0
+
+    inserted = 0
+    for index, (public_id, reporter_name, retailer_code, purchase_date, description) in enumerate(
+        DEMO_COMPLAINTS,
+        start=1,
+    ):
+        if db.scalar(select(Case.id).where(Case.public_id == public_id)):
+            continue
+        retailer = organizations[retailer_code]
+        reviewer = reviewers[retailer.id]
+        created_at = datetime(2026, 10, 16, 9, index, tzinfo=timezone.utc)
+        case = Case(
+            public_id=public_id,
+            tracking_token_hash=token_hash(f"batchbridge-demo-complaint-{index}"),
+            source="customer",
+            reporter_name=reporter_name,
+            retailer_id=retailer.id,
+            product_name="SweetCo Alpine Milk Chocolate 100g",
+            batch_number="38",
+            purchase_date=purchase_date,
+            description=description,
+            status="under_review",
+            created_at=created_at,
+            updated_at=created_at,
+        )
+        db.add(case)
+        db.flush()
+        db.add(
+            RetailerReview(
+                case_id=case.id,
+                retailer_id=retailer.id,
+                reviewer_id=reviewer.id,
+                decision="forwarded",
+                notes="Fictional demo complaint verified and forwarded for importer investigation.",
+                created_at=created_at,
+            )
+        )
+        add_audit(db, case.id, "report_created", details={"source": "customer", "demo": True})
+        add_audit(
+            db,
+            case.id,
+            "retailer_review_submitted",
+            reviewer.id,
+            {"decision": "forwarded", "demo": True},
+        )
+        inserted += 1
+    return inserted
+
 
 def seed_demo_data(db: Session) -> None:
     if db.scalar(select(Organization.id).limit(1)):
+        seed_demo_complaints(db)
+        db.commit()
         return
 
     organizations: dict[str, Organization] = {}
@@ -88,4 +222,5 @@ def seed_demo_data(db: Session) -> None:
                 shipped_at=shipped_at,
             )
         )
+    seed_demo_complaints(db)
     db.commit()

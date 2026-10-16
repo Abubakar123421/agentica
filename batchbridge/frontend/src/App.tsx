@@ -69,6 +69,52 @@ function asArray(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? (value as Record<string, unknown>[]) : [];
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function displayValue(value: unknown, fallback = "Not provided") {
+  return value == null || value === "" ? fallback : String(value);
+}
+
+function ManufacturerReport({ packet, downloadUrl }: { packet: Record<string, unknown>; downloadUrl?: string }) {
+  const product = asRecord(packet.product);
+  const manufacturer = asRecord(product.manufacturer);
+  const batch = asRecord(packet.batch);
+  const summary = asRecord(packet.distribution_summary);
+  const distribution = asArray(packet.distribution);
+  const findings = asArray(packet.findings);
+  const evidence = asArray(packet.evidence);
+  const actions = Array.isArray(packet.requested_actions)
+    ? packet.requested_actions
+    : Array.isArray(packet.manufacturer_questions)
+      ? packet.manufacturer_questions
+      : [];
+  return (
+    <div className="manufacturer-report">
+      <div className="manufacturer-report-head">
+        <div><span className="eyebrow">Manufacturer report</span><h3>{displayValue(product.name, "Product investigation")}</h3><p>Case {displayValue(packet.case_public_id)} · Lot {displayValue(batch.batch_number)}</p></div>
+        {downloadUrl ? <a className="button button-secondary" href={downloadUrl} download>Download CSV</a> : <span className="csv-note">CSV created when this report is sent</span>}
+      </div>
+      <div className="report-facts">
+        <span><small>Manufacturer</small><strong>{displayValue(manufacturer.name)}</strong></span>
+        <span><small>Product code</small><strong>{displayValue(product.sku)}</strong></span>
+        <span><small>Received</small><strong>{Number(batch.quantity_received ?? 0).toLocaleString()} units</strong></span>
+        <span><small>Shipped</small><strong>{Number(summary.quantity_shipped ?? batch.quantity_shipped ?? 0).toLocaleString()} units</strong></span>
+        <span><small>Retained</small><strong>{Number(summary.quantity_retained ?? batch.quantity_retained ?? 0).toLocaleString()} units</strong></span>
+      </div>
+      {distribution.length > 0 && <div className="report-section"><h4>Where this lot was shipped</h4><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supermarket</th><th>Shipment</th><th>Quantity</th><th>Shipped</th></tr></thead><tbody>{distribution.map((item) => <tr key={displayValue(item.shipment_id)}><td>{displayValue(item.retailer_name)}</td><td>{displayValue(item.shipment_reference)}</td><td>{Number(item.quantity ?? 0).toLocaleString()}</td><td>{formatDate(item.shipped_at ? String(item.shipped_at) : null)}</td></tr>)}</tbody></table></div></div>}
+      {findings.length > 0 && <div className="report-section"><h4>Human inspection findings</h4><div className="report-table-wrap"><table className="report-table"><thead><tr><th>Supermarket</th><th>Finding</th><th>Inspector notes</th><th>Completed</th></tr></thead><tbody>{findings.map((item) => <tr key={displayValue(item.inspection_id)}><td>{displayValue(item.retailer_name)}</td><td><Pill value={displayValue(item.finding, "pending")} /></td><td>{displayValue(item.notes)}</td><td>{formatDate(item.completed_at ? String(item.completed_at) : null)}</td></tr>)}</tbody></table></div></div>}
+      {actions.length > 0 && <div className="report-section"><h4>Requested manufacturer actions</h4><ol className="report-actions">{actions.map((item, index) => <li key={index}>{String(item)}</li>)}</ol></div>}
+      {evidence.length > 0 && <div className="report-section"><h4>Supporting evidence</h4><div className="report-files">{evidence.map((item) => <a key={displayValue(item.id)} href={`/api/v1/evidence/${encodeURIComponent(displayValue(item.id))}`} target="_blank" rel="noreferrer">{displayValue(item.filename)} ↗</a>)}</div></div>}
+      {packet.importer_notes != null && <div className="report-section"><h4>Importer notes</h4><p>{String(packet.importer_notes)}</p></div>}
+      <details className="technical-details"><summary>Technical details</summary><pre>{JSON.stringify(packet, null, 2)}</pre></details>
+    </div>
+  );
+}
+
 function Pill({ value }: { value: string }) {
   const tone =
     value.includes("approved") || value.includes("completed") || value.includes("responded")
@@ -396,7 +442,7 @@ function ProposalReview({ proposal, caseId, onDone }: { proposal: Proposal; case
         </div>
       )}
       {proposal.type === "manufacturer_escalation_packet" && (
-        <details><summary>Preview manufacturer packet</summary><pre>{JSON.stringify(proposal.payload.manufacturer_packet, null, 2)}</pre></details>
+        <ManufacturerReport packet={asRecord(proposal.payload.manufacturer_packet)} />
       )}
       <label>Reviewer notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record the reason for your decision" /></label>
       {error && <div className="alert danger">{error}</div>}
@@ -654,7 +700,7 @@ function ManufacturerInbox() {
   return (
     <div className="manufacturer-grid">
       <aside className="case-list"><div className="list-heading"><span className="eyebrow">Manufacturer</span><h2>Escalations</h2></div>{items.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><strong>{String(item.packet.case_public_id)}</strong><span>{String((item.packet.product as Record<string, unknown>)?.name ?? "Product")}</span><Pill value={item.status} /></button>)}</aside>
-      <main className="workspace">{selected ? <><header className="case-header"><div><span className="eyebrow">Evidence packet</span><h1>{String(selected.packet.case_public_id)}</h1><p>Review the verified trace and retailer findings before responding.</p></div><Pill value={selected.status} /></header><section className="panel"><details open><summary>Approved manufacturer packet</summary><pre>{JSON.stringify(selected.packet, null, 2)}</pre></details></section>{selected.status !== "responded" && <section className="panel approval-panel"><h2>Manufacturer response</h2><label>Investigation result<textarea rows={5} value={response} onChange={(event) => setResponse(event.target.value)} /></label><button className="button button-primary" onClick={() => void submit()}>Submit human response</button></section>}</> : <div className="empty-state">No manufacturer escalations yet.</div>}</main>
+      <main className="workspace">{selected ? <><header className="case-header"><div><span className="eyebrow">Evidence packet</span><h1>{String(selected.packet.case_public_id)}</h1><p>Review the verified trace and retailer findings before responding.</p></div><Pill value={selected.status} /></header><section className="panel"><ManufacturerReport packet={selected.packet} downloadUrl={api.manufacturerReportUrl(selected.id)} /></section>{selected.status !== "responded" && <section className="panel approval-panel"><h2>Manufacturer response</h2><label>Investigation result<textarea rows={5} value={response} onChange={(event) => setResponse(event.target.value)} /></label><button className="button button-primary" onClick={() => void submit()}>Submit human response</button></section>}</> : <div className="empty-state">No manufacturer escalations yet.</div>}</main>
     </div>
   );
 }
@@ -681,7 +727,7 @@ function StaffApp({ user, onLogout }: { user: User; onLogout: () => void }) {
         <header className="app-bar"><div><span className="app-kicker">Operations console</span><strong>{user.role === "manufacturer_reviewer" ? "Manufacturer review" : "Food safety investigations"}</strong></div><div className="bar-actions"><span className="live-indicator"><i /> Live records</span><button className="icon-button" onClick={onLogout} aria-label="Sign out" title="Sign out">↗</button></div></header>
         {user.role === "manufacturer_reviewer" ? <ManufacturerInbox /> : (
           <div className="dashboard-grid">
-            <aside className="case-list"><div className="list-heading"><span className="eyebrow">Operational queue</span><h2>Cases</h2><span>{cases.length} active records</span></div>{cases.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><div><strong>{item.public_id}</strong><span>{item.product_name}</span></div><Pill value={item.status} /><small>Lot {item.batch_number ?? "unknown"}</small></button>)}</aside>
+            <aside className="case-list"><div className="list-heading"><span className="eyebrow">Operational queue</span><h2>Cases</h2><span>{cases.length} active records</span></div>{cases.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><div><strong>{item.public_id}</strong><span>{item.reporter_name ?? item.product_name}</span></div><Pill value={item.status} /><small>{item.product_name} · Lot {item.batch_number ?? "unknown"}</small></button>)}</aside>
             <main>{selected ? <CaseWorkspace user={user} summary={selected} /> : <div className="empty-state">No cases are available for this organization.</div>}</main>
           </div>
         )}

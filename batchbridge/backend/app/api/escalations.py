@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models import Case, Escalation, User
 from app.schemas import EscalationCreate, ManufacturerResponseCreate
+from app.services.manufacturer_report import manufacturer_report_csv
 
 router = APIRouter(prefix="/escalations", tags=["manufacturer escalations"])
 
@@ -54,6 +55,27 @@ def escalation_inbox(
         }
         for item in rows
     ]
+
+
+@router.get("/{escalation_id}/report.csv")
+def download_manufacturer_report(
+    escalation_id: str,
+    user: User = Depends(require_roles("importer_investigator", "manufacturer_reviewer")),
+    db: Session = Depends(get_db),
+):
+    escalation = db.get(Escalation, escalation_id)
+    if not escalation or (
+        user.role == "manufacturer_reviewer"
+        and escalation.manufacturer_id != user.organization_id
+    ):
+        raise HTTPException(status_code=404, detail="Escalation not found")
+    public_id = str(escalation.packet.get("case_public_id") or escalation.case_id)
+    filename = f"BatchBridge-{public_id}-manufacturer-report.csv"
+    return Response(
+        content="\ufeff" + manufacturer_report_csv(escalation.packet),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/{escalation_id}/response")

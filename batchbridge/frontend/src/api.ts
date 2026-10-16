@@ -87,6 +87,8 @@ export const api = {
     );
   },
   escalations: () => request<Escalation[]>("/api/v1/escalations"),
+  manufacturerReportUrl: (escalationId: string) =>
+    `/api/v1/escalations/${encodeURIComponent(escalationId)}/report.csv`,
   respond: (escalationId: string, response: string) =>
     request(`/api/v1/escalations/${escalationId}/response`, {
       method: "POST",
