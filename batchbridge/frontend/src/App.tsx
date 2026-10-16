@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "./api";
 import { createDemoPhoto } from "./demoPhoto";
+import { HowItWorks } from "./HowItWorks";
 import type {
   AgentRun,
   CaseDetail,
@@ -80,6 +81,54 @@ function Pill({ value }: { value: string }) {
   return <span className={`pill pill-${tone}`}>{label(value)}</span>;
 }
 
+function PublicNavigation({ onLogin }: { onLogin: () => void }) {
+  return (
+      <nav className="public-nav">
+        <a className="brand" href="/" aria-label="BatchBridge home">
+          <span className="brand-mark"><i /><i /><i /></span>
+          <span>Batch<span className="brand-accent">Bridge</span></span>
+        </a>
+        <div className="public-links" aria-label="Page navigation">
+          <a href="/how-it-works">How it works</a>
+          <a href="/safety-controls">Safety controls</a>
+        </div>
+        <button className="button button-nav" onClick={onLogin}>Staff portal <span>↗</span></button>
+      </nav>
+  );
+}
+
+function PublicInfoPage({ page, onLogin }: { page: "how-it-works" | "safety-controls"; onLogin: () => void }) {
+  return (
+    <main className="public-shell">
+      <PublicNavigation onLogin={onLogin} />
+      <div className="public-nav"><a className="text-link" href="/">← Back to main page</a></div>
+      {page === "how-it-works" ? (
+      <HowItWorks onLogin={onLogin} />
+      ) : (
+      <section className="control-section" id="safety-controls">
+        <div className="control-visual" aria-hidden="true">
+          <div className="control-orbit orbit-one" /><div className="control-orbit orbit-two" />
+          <div className="control-core"><span>BB</span><small>human<br />control</small></div>
+          <span className="control-chip chip-one">Verified batch</span>
+          <span className="control-chip chip-two">Approved action</span>
+          <span className="control-chip chip-three">Audit event</span>
+        </div>
+        <div className="control-copy">
+          <span className="eyebrow">Designed for consequence</span>
+          <h2>Evidence organized.<br />People decide.</h2>
+          <p>BatchBridge prepares evidence and suggested next steps. Authorized people approve every operational decision.</p>
+          <div className="control-list">
+            <span><i>✓</i> Product and lot matched together</span>
+            <span><i>✓</i> Customer contact data stays protected</span>
+            <span><i>✓</i> Meaningful actions enter audit trail</span>
+          </div>
+        </div>
+      </section>
+      )}
+    </main>
+  );
+}
+
 function PublicReport({ onLogin }: { onLogin: () => void }) {
   const [form, setForm] = useState({
     reporter_name: "",
@@ -156,17 +205,7 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
 
   return (
     <main className="public-shell">
-      <nav className="public-nav">
-        <a className="brand" href="/" aria-label="BatchBridge home">
-          <span className="brand-mark"><i /><i /><i /></span>
-          <span>Batch<span className="brand-accent">Bridge</span></span>
-        </a>
-        <div className="public-links" aria-label="Page navigation">
-          <a href="#how-it-works">How it works</a>
-          <a href="#safety-controls">Safety controls</a>
-        </div>
-        <button className="button button-nav" onClick={onLogin}>Staff portal <span>↗</span></button>
-      </nav>
+      <PublicNavigation onLogin={onLogin} />
       <section className="hero-grid">
         <div className="hero-copy">
           <span className="signal-label"><i /> Human-led food safety response</span>
@@ -177,7 +216,7 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="#report-form">Report a concern</a>
-            <a className="text-link" href="#how-it-works">See how it works <span>↓</span></a>
+            <a className="text-link" href="/how-it-works">See how it works <span>↓</span></a>
           </div>
           <div className="trust-row" aria-label="Investigation principles">
             <span><i>01</i> Evidence first</span>
@@ -237,38 +276,6 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
         <span>Role-based approvals</span><i />
         <span>End-to-end audit trail</span>
       </section>
-      <section className="story-section" id="how-it-works">
-        <div className="story-intro">
-          <span className="eyebrow">One accountable workflow</span>
-          <h2>Every signal gets structure.<br />Every action gets a human.</h2>
-          <p>BatchBridge turns scattered reports into a precise investigation without automating safety verdicts.</p>
-        </div>
-        <div className="workflow-showcase">
-          <article><span>01</span><div><small>Signal</small><h3>Capture evidence</h3><p>Complaint, product photos, purchase context, and source stay connected.</p></div></article>
-          <article><span>02</span><div><small>Verify</small><h3>Confirm identity</h3><p>Retailer officer verifies product and manufacturer lot before tracing starts.</p></div></article>
-          <article><span>03</span><div><small>Trace</small><h3>Find exact recipients</h3><p>Read-only records identify every shipment tied to exact product and lot.</p></div></article>
-          <article><span>04</span><div><small>Decide</small><h3>Approve next action</h3><p>Authorized humans review proposals, retailer findings, and manufacturer response.</p></div></article>
-        </div>
-      </section>
-      <section className="control-section" id="safety-controls">
-        <div className="control-visual" aria-hidden="true">
-          <div className="control-orbit orbit-one" /><div className="control-orbit orbit-two" />
-          <div className="control-core"><span>BB</span><small>human<br />control</small></div>
-          <span className="control-chip chip-one">Verified batch</span>
-          <span className="control-chip chip-two">Approved action</span>
-          <span className="control-chip chip-three">Audit event</span>
-        </div>
-        <div className="control-copy">
-          <span className="eyebrow">Designed for consequence</span>
-          <h2>Evidence organized.<br />People decide.</h2>
-          <p>BatchBridge prepares evidence and suggested next steps. Authorized people approve every operational decision.</p>
-          <div className="control-list">
-            <span><i>✓</i> Product and lot matched together</span>
-            <span><i>✓</i> Customer contact data stays protected</span>
-            <span><i>✓</i> Meaningful actions enter audit trail</span>
-          </div>
-        </div>
-      </section>
       <footer className="public-footer">
         <div className="brand"><span className="brand-mark"><i /><i /><i /></span><span>Batch<span className="brand-accent">Bridge</span></span></div>
         <p>Food safety intelligence with human accountability.</p>
@@ -304,7 +311,7 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
         <span className="brand-mark large"><i /><i /><i /></span>
         <div><span className="eyebrow">Operations portal</span><h1>Continue your investigation</h1></div>
         <label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-        <label>Password<input required type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
+        <label>Password<input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <div className="alert danger">{error}</div>}
         <button className="button button-primary" disabled={busy}>{busy ? "Signing in…" : "Sign in"}</button>
         <p className="muted small">Use a seeded account and the configured DEMO_PASSWORD.</p>
@@ -689,6 +696,13 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   useEffect(() => { void api.me().then(setUser).catch(() => undefined).finally(() => setLoading(false)); }, []);
   async function logout() { await api.logout(); setUser(null); setScreen("public"); }
+  const publicPage = window.location.pathname.replace(/\/$/, "");
+  if (publicPage === "/how-it-works" || publicPage === "/safety-controls") {
+    return <PublicInfoPage page={publicPage.slice(1) as "how-it-works" | "safety-controls"} onLogin={() => {
+      window.history.replaceState(null, "", "/");
+      setScreen("login");
+    }} />;
+  }
   if (loading) return <div className="loading-screen"><span className="brand-mark large"><i /><i /><i /></span><p>Loading trusted records…</p></div>;
   if (user) return <StaffApp user={user} onLogout={() => void logout()} />;
   if (screen === "login") return <Login onSuccess={setUser} onBack={() => setScreen("public")} />;

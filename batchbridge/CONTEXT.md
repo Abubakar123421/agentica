@@ -28,6 +28,13 @@ MCP is a tool-access protocol, independent of the number of agents or models.
 
 ## Roles and interfaces
 
+The public `/how-it-works` page follows the supplied “How it works (light)” PDF: a four-step
+overview, three investigation stages with importer approval points, shop findings, summary figures,
+and a role permissions table. It is one scrollable page with a responsive stacked workflow and a
+keyboard-scrollable permissions table on small screens. The page also clarifies the existing triage
+review before tracing; the two highlighted importer approvals govern shop tasks and escalation.
+This is frontend explanatory content only; backend permissions and workflow gates are unchanged.
+
 - Customer: public photo complaint, supermarket selection, description, optional contact/date,
   private tracking token. Customers do not need to identify a lot themselves.
 - Supermarket food safety manager: internal retailer staff, not a government officer. Verifies
@@ -122,12 +129,17 @@ Two generated fictional photos are in `examples/demo-evidence/`.
 Seeded logins: `importer@batchbridge.demo`, `retailer-a@batchbridge.demo`,
 `retailer-b@batchbridge.demo`, `retailer-c@batchbridge.demo`, `manufacturer@batchbridge.demo`.
 Passwords come from `DEMO_PASSWORD`; production credentials must be set through deployment secrets.
+All five local demo account hashes were synchronized with the current ignored `.env` value.
+Login validates a non-empty password rather than imposing a password-creation length rule;
+short configured demo credentials work in both the UI and API. Stored passwords remain hashed.
 Local resets retain seed accounts/catalogue/shipments and clear complaints and workflow history,
 after a backup. Database files and backups are not part of Git.
 
 ## Verification and latest local handoff
 
-35 backend tests passed, Ruff passed, frontend TypeScript/Vite build passed.
+36 backend tests passed, Ruff passed, frontend TypeScript/Vite build passed.
+All five local demo accounts passed live API login, authenticated session, and logout checks
+after the demo password update. Environment values and database hashes remain local, outside Git.
 A live MCP check returned the expected three retailers for lot 38 without a model call.
 The latest local test case `BB-19BB1B3CA0` produced a rule-based manufacturer packet awaiting
 importer approval. This is local state only, not seeded or committed data, and can change in use.

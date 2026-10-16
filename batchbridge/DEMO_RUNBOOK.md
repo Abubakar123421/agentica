@@ -17,6 +17,11 @@ investigation while AI gathers evidence and humans control every safety action.
 ## Accounts
 
 All seeded accounts use the deployed `DEMO_PASSWORD`.
+The current local demo accounts share the password configured in ignored `.env`.
+Login accepts non-empty configured passwords, including short demo passwords; hashing and
+session authentication remain enabled. Set `DEMO_PASSWORD` in the cloud secrets separately
+before creating demo accounts there. Changing that variable does not update existing accounts;
+their stored password hashes must also be updated. Never commit `.env` or database files.
 
 - `importer@batchbridge.demo`
 - `retailer-a@batchbridge.demo`
