@@ -13,19 +13,44 @@ import type {
   User,
 } from "./types";
 
-const agentMeta = {
-  triage: { number: "01", title: "Triage", description: "Normalizes the report and missing facts" },
+const stageMeta = {
+  triage: { number: "01", title: "Review report", action: "Review report details", description: "Checks the report and identifies missing information" },
   traceability: {
     number: "02",
-    title: "Traceability",
-    description: "Matches the exact lot and shipment recipients",
+    title: "Trace affected batch",
+    action: "Trace affected batch",
+    description: "Matches the verified product and lot to shipment destinations",
   },
   escalation: {
     number: "03",
-    title: "Escalation",
-    description: "Builds a manufacturer evidence packet",
+    title: "Prepare manufacturer review",
+    action: "Prepare manufacturer review",
+    description: "Combines approved evidence for manufacturer response",
   },
 } as const;
+
+function proposalTitle(type: string) {
+  if (type === "triage_recommendation") return "Report review recommendation";
+  if (type === "retailer_check_plan") return "Retailer inspection plan";
+  if (type === "manufacturer_escalation_packet") return "Manufacturer evidence package";
+  return label(type);
+}
+
+function stakeholderText(value: string) {
+  const terms: Record<string, string> = {
+    triage: "report review",
+    traceability: "batch tracing",
+    escalation: "manufacturer review",
+    agent: "evidence check",
+    proposal: "recommendation",
+  };
+  return value.replace(/\b(triage|traceability|escalation|agent|proposal)\b/gi, (term) => {
+    const replacement = terms[term.toLowerCase()];
+    return term[0] === term[0].toUpperCase()
+      ? replacement[0].toUpperCase() + replacement.slice(1)
+      : replacement;
+  });
+}
 
 function label(value: string) {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -133,33 +158,46 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
     <main className="public-shell">
       <nav className="public-nav">
         <a className="brand" href="/" aria-label="BatchBridge home">
-          <span className="brand-mark">BB</span>
-          <span>BatchBridge</span>
+          <span className="brand-mark"><i /><i /><i /></span>
+          <span>Batch<span className="brand-accent">Bridge</span></span>
         </a>
-        <button className="button button-ghost" onClick={onLogin}>Staff sign in</button>
+        <div className="public-links" aria-label="Page navigation">
+          <a href="#how-it-works">How it works</a>
+          <a href="#safety-controls">Safety controls</a>
+        </div>
+        <button className="button button-nav" onClick={onLogin}>Staff portal <span>↗</span></button>
       </nav>
       <section className="hero-grid">
         <div className="hero-copy">
-          <span className="eyebrow">Human-approved food safety investigations</span>
-          <h1>Something wrong with your food? Start here.</h1>
+          <span className="signal-label"><i /> Human-led food safety response</span>
+          <h1>From first report to <em>verified action.</em></h1>
           <p>
-            Share a photo and tell us what happened. Your supermarket’s food safety officer will
-            check the product details and forward the verified complaint for investigation.
+            Report a product concern in minutes. BatchBridge connects verified evidence,
+            exact batch records, and accountable human decisions in one secure investigation.
           </p>
-          <div className="trust-row">
-            <span>01 · Share a photo</span><span>02 · Officer verifies</span><span>03 · We investigate</span>
+          <div className="hero-actions">
+            <a className="button button-primary" href="#report-form">Report a concern</a>
+            <a className="text-link" href="#how-it-works">See how it works <span>↓</span></a>
+          </div>
+          <div className="trust-row" aria-label="Investigation principles">
+            <span><i>01</i> Evidence first</span>
+            <span><i>02</i> Human approved</span>
+            <span><i>03</i> Fully auditable</span>
           </div>
           <form className="tracking-box" onSubmit={track}>
-            <div><strong>Already submitted?</strong><span>Use your private token to check progress.</span></div>
-            <div className="tracking-controls"><input aria-label="Private tracking token" required value={trackingToken} onChange={(event) => setTrackingToken(event.target.value)} placeholder="Paste tracking token" /><button className="button button-secondary">Track</button></div>
+            <div><span className="tracking-icon">⌁</span><span><strong>Track an existing report</strong><small>Use your private tracking token.</small></span></div>
+            <div className="tracking-controls"><input aria-label="Private tracking token" required value={trackingToken} onChange={(event) => setTrackingToken(event.target.value)} placeholder="Enter tracking token" /><button className="button button-secondary">Track report</button></div>
             {tracked && <div className="tracking-result"><div><strong>{tracked.case_id}</strong><span>{tracked.product_name}</span></div><Pill value={tracked.status} /><Pill value={tracked.safety_verdict} /></div>}
           </form>
         </div>
-        <form className="report-card" onSubmit={submit}>
-          <div>
-            <span className="eyebrow">Public report</span>
-            <h2>Tell us what happened</h2>
-            <p className="muted">No product codes needed. Your supermarket officer will verify the product and batch.</p>
+        <form className="report-card" id="report-form" onSubmit={submit}>
+          <div className="form-header">
+            <span className="form-number">01</span>
+            <div>
+              <span className="eyebrow">Start a protected report</span>
+              <h2>Tell us what happened</h2>
+              <p className="muted">No product codes needed. Officer verifies product and batch.</p>
+            </div>
           </div>
           <div className="form-grid two">
             <label>Name<input value={form.reporter_name} onChange={(event) => setForm({ ...form, reporter_name: event.target.value })} /></label>
@@ -190,8 +228,52 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
             </div>
           )}
           <button className="button button-primary" disabled={busy || Boolean(created)}>{busy ? "Preparing report…" : created ? "Report received" : "Send to supermarket officer"}</button>
+          <p className="form-footnote"><span>●</span> Your report remains private and creates a complete audit record.</p>
         </form>
       </section>
+      <section className="proof-strip" aria-label="Platform characteristics">
+        <span>Exact lot matching</span><i />
+        <span>Read-only evidence tools</span><i />
+        <span>Role-based approvals</span><i />
+        <span>End-to-end audit trail</span>
+      </section>
+      <section className="story-section" id="how-it-works">
+        <div className="story-intro">
+          <span className="eyebrow">One accountable workflow</span>
+          <h2>Every signal gets structure.<br />Every action gets a human.</h2>
+          <p>BatchBridge turns scattered reports into a precise investigation without automating safety verdicts.</p>
+        </div>
+        <div className="workflow-showcase">
+          <article><span>01</span><div><small>Signal</small><h3>Capture evidence</h3><p>Complaint, product photos, purchase context, and source stay connected.</p></div></article>
+          <article><span>02</span><div><small>Verify</small><h3>Confirm identity</h3><p>Retailer officer verifies product and manufacturer lot before tracing starts.</p></div></article>
+          <article><span>03</span><div><small>Trace</small><h3>Find exact recipients</h3><p>Read-only records identify every shipment tied to exact product and lot.</p></div></article>
+          <article><span>04</span><div><small>Decide</small><h3>Approve next action</h3><p>Authorized humans review proposals, retailer findings, and manufacturer response.</p></div></article>
+        </div>
+      </section>
+      <section className="control-section" id="safety-controls">
+        <div className="control-visual" aria-hidden="true">
+          <div className="control-orbit orbit-one" /><div className="control-orbit orbit-two" />
+          <div className="control-core"><span>BB</span><small>human<br />control</small></div>
+          <span className="control-chip chip-one">Verified batch</span>
+          <span className="control-chip chip-two">Approved action</span>
+          <span className="control-chip chip-three">Audit event</span>
+        </div>
+        <div className="control-copy">
+          <span className="eyebrow">Designed for consequence</span>
+          <h2>Evidence organized.<br />People decide.</h2>
+          <p>BatchBridge prepares evidence and suggested next steps. Authorized people approve every operational decision.</p>
+          <div className="control-list">
+            <span><i>✓</i> Product and lot matched together</span>
+            <span><i>✓</i> Customer contact data stays protected</span>
+            <span><i>✓</i> Meaningful actions enter audit trail</span>
+          </div>
+        </div>
+      </section>
+      <footer className="public-footer">
+        <div className="brand"><span className="brand-mark"><i /><i /><i /></span><span>Batch<span className="brand-accent">Bridge</span></span></div>
+        <p>Food safety intelligence with human accountability.</p>
+        <button className="button button-ghost" onClick={onLogin}>Open staff portal</button>
+      </footer>
     </main>
   );
 }
@@ -219,7 +301,7 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
     <main className="login-shell">
       <button className="back-link" onClick={onBack}>← Return to report form</button>
       <form className="login-card" onSubmit={submit}>
-        <span className="brand-mark large">BB</span>
+        <span className="brand-mark large"><i /><i /><i /></span>
         <div><span className="eyebrow">Operations portal</span><h1>Continue your investigation</h1></div>
         <label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label>Password<input required type="password" minLength={8} value={password} onChange={(event) => setPassword(event.target.value)} /></label>
@@ -231,8 +313,8 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
   );
 }
 
-function AgentCard({ agent, run, gate }: { agent: keyof typeof agentMeta; run?: AgentRun; gate: CaseDetail["workflow"][AgentRun["agent_type"]] }) {
-  const meta = agentMeta[agent];
+function AgentCard({ agent, run, gate }: { agent: keyof typeof stageMeta; run?: AgentRun; gate: CaseDetail["workflow"][AgentRun["agent_type"]] }) {
+  const meta = stageMeta[agent];
   const result = run?.result;
   const assessment = result?.ai_assessment as { summary?: string; unanswered_questions?: string[] } | undefined;
   const toolCalls = asArray(result?.tool_calls);
@@ -240,33 +322,32 @@ function AgentCard({ agent, run, gate }: { agent: keyof typeof agentMeta; run?: 
   const recommendation =
     typeof result?.recommendation === "string" ? result.recommendation : null;
   return (
-    <article className={`agent-card ${run || gate.can_run ? "active" : "locked"}`}>
+    <article className={`agent-card ${run?.status === "completed" ? "complete" : run || gate.can_run ? "active" : "locked"}`}>
       <div className="agent-heading">
         <span className="agent-number">{meta.number}</span>
-        <div><h3>{meta.title} Agent</h3><p>{meta.description}</p></div>
+        <div><h3>{meta.title}</h3><p>{meta.description}</p></div>
         <Pill value={run?.status ?? (gate.can_run ? "ready" : "locked")} />
       </div>
       {run ? (
         <div className="agent-body">
-          {result && <span className="pill pill-neutral">{result.execution_mode === "llm" ? `Groq · ${String(result.model)} · ${String(result.llm_turns)} model turns` : result.execution_mode === "rules" ? "Rule-based · MCP records · No LLM" : "Previous demo rules run"}</span>}
           {assessment?.summary && <p className="muted small">{assessment.summary}</p>}
           {assessment?.unanswered_questions && assessment.unanswered_questions.length > 0 && <div className="small"><strong>Follow-up questions</strong><ul>{assessment.unanswered_questions.map((question, index) => <li key={index}>{question}</li>)}</ul></div>}
           <div className="metric-row">
             {confidence && <span><small>Confidence</small><strong>{label(confidence)}</strong></span>}
-            {recommendation && <span><small>Recommendation</small><strong>{label(recommendation)}</strong></span>}
-            <span><small>MCP calls</small><strong>{toolCalls.length}</strong></span>
+            {recommendation && <span><small>Suggested next step</small><strong>{label(recommendation)}</strong></span>}
           </div>
-          {toolCalls.length > 0 && (
-            <div className="tool-list">
-              {toolCalls.map((call, index) => (
-                <span key={`${String(call.tool)}-${index}`}>{String(call.tool)} · {String(call.record_count ?? 0)} records</span>
-              ))}
+          {gate.blocked_reason && !["queued", "running"].includes(run.status) && <div className="stage-guidance" role="status"><strong>Before you continue</strong><span>{stakeholderText(gate.blocked_reason)}</span></div>}
+          {run.error && <div className="alert danger"><strong>This step could not finish.</strong><span>Try again. Contact system support if the problem continues.</span></div>}
+          {result && <details className="technical-details"><summary>Technical details</summary>
+            <div className="technical-body">
+              <span>{result.execution_mode === "llm" ? `Groq · ${String(result.model)} · ${String(result.llm_turns)} model turns` : result.execution_mode === "rules" ? "Rules-based evidence check" : "Previous demonstration run"}</span>
+              <span>{toolCalls.length} evidence tool call(s)</span>
+              {toolCalls.length > 0 && <div className="tool-list">{toolCalls.map((call, index) => <span key={`${String(call.tool)}-${index}`}>{String(call.tool)} · {String(call.record_count ?? 0)} records</span>)}</div>}
+              {run.error && <code>{run.error}</code>}
             </div>
-          )}
-          {gate.blocked_reason && !["queued", "running"].includes(run.status) && <div className="alert" role="status">{gate.blocked_reason}</div>}
-          {run.error && <div className="alert danger">{run.error}</div>}
+          </details>}
         </div>
-      ) : <p className="locked-copy">{gate.blocked_reason ?? "Ready. Use the run button below to begin this stage."}</p>}
+      ) : <p className="locked-copy">{gate.blocked_reason ? stakeholderText(gate.blocked_reason) : "Ready. Use the next action below to begin this step."}</p>}
     </article>
   );
 }
@@ -292,9 +373,9 @@ function ProposalReview({ proposal, caseId, onDone }: { proposal: Proposal; case
 
   return (
     <section className="panel approval-panel">
-      <div className="section-heading"><div><span className="eyebrow">Human checkpoint</span><h2>{label(proposal.type)}</h2></div><Pill value={proposal.status} /></div>
-      <p className="muted">Review proposal version {proposal.version} before anything is sent or assigned.</p>
-      {proposal.review_block_reason && <div className="alert">{proposal.review_block_reason}</div>}
+      <div className="section-heading"><div><span className="eyebrow">Approval needed</span><h2>{proposalTitle(proposal.type)}</h2></div><Pill value={proposal.status} /></div>
+      <p className="muted">Review recommendation version {proposal.version} before anything is sent or assigned.</p>
+      {proposal.review_block_reason && <div className="alert">{stakeholderText(proposal.review_block_reason)}</div>}
       {proposal.payload.recommendation != null && <p><strong>Recommendation:</strong> {label(String(proposal.payload.recommendation))}</p>}
       {asArray(proposal.payload.rationale).map((reason, index) => <p key={index}>{String(reason)}</p>)}
       {retailers.length > 0 && (
@@ -313,8 +394,8 @@ function ProposalReview({ proposal, caseId, onDone }: { proposal: Proposal; case
       <label>Reviewer notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record the reason for your decision" /></label>
       {error && <div className="alert danger">{error}</div>}
       <div className="action-row">
-        <button className="button button-primary" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("approved")}>Approve action</button>
-        <button className="button button-danger" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("rejected")}>Reject</button>
+        <button className="button button-primary" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("approved")}>Approve and continue</button>
+        <button className="button button-danger" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("rejected")}>Send back</button>
       </div>
     </section>
   );
@@ -440,7 +521,7 @@ function ImportPanel() {
   }
   return (
     <section className="panel compact-panel">
-      <div><span className="eyebrow">Importer records</span><h2>Update traceability data</h2></div>
+      <div><span className="eyebrow">Batch and shipment records</span><h2>Update tracking records</h2></div>
       <div className="import-grid">
         <label className="file-button">Batch CSV<input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => void upload("batches", event.target.files?.[0])} /></label>
         <label className="file-button">Shipment CSV<input type="file" accept=".csv,text/csv" disabled={busy} onChange={(event) => void upload("shipments", event.target.files?.[0])} /></label>
@@ -481,13 +562,22 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
     try {
       await api.startAgent(summary.id, agent);
       await refresh();
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Agent failed"); }
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Evidence check failed"); }
     finally { setBusy(""); }
   }
 
   if (!detail) return <div className="empty-state">Loading case evidence…</div>;
   const pending = detail.proposals.filter((proposal) => proposal.status === "pending" && Object.values(detail.workflow).some((step) => step.latest_proposal_id === proposal.id));
   const agentRunning = Boolean(busy) || detail.agent_runs.some((run) => ["queued", "running"].includes(run.status));
+  const completedStages = (Object.keys(stageMeta) as AgentRun["agent_type"][]).filter((stage) => latestRuns[stage]?.status === "completed").length;
+  const nextStage: AgentRun["agent_type"] | null = detail.workflow.escalation.can_run
+    ? "escalation"
+    : detail.workflow.traceability.can_run
+      ? "traceability"
+      : detail.workflow.triage.can_run
+        ? "triage"
+        : null;
+  const availableOtherStages = (Object.keys(stageMeta) as AgentRun["agent_type"][]).filter((stage) => stage !== nextStage && detail.workflow[stage].can_run);
 
   return (
     <div className="workspace">
@@ -512,23 +602,26 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
       {detail.case.source === "customer_photo" && detail.retailer_review?.decision !== "forwarded" && user.role === "importer_investigator" && <div className="alert" role="status">Awaiting supermarket officer verification. Product identification and tracing become available after the officer forwards the case.</div>}
       {user.role === "retailer_safety_manager" && <RetailerActions key={detail.case.id} detail={detail} inspections={inspections} onDone={refresh} />}
       <section>
-        <div className="section-heading"><div><span className="eyebrow">Agent workflow</span><h2>Evidence before action</h2></div><button className="button button-ghost" onClick={() => void refresh()}>Refresh</button></div>
+        <div className="section-heading"><div><span className="eyebrow">Investigation progress</span><h2>Evidence checks</h2><p className="section-description">Complete each check in order. Every operational decision still requires human approval.</p></div><button className="button button-ghost" onClick={() => void refresh()}>Refresh status</button></div>
+        <div className="progress-summary" aria-label={`${completedStages} of 3 evidence checks complete`}>
+          <div><strong>{completedStages} of 3 complete</strong><span>{agentRunning ? "Checking evidence now" : nextStage ? `${stageMeta[nextStage].title} is ready` : pending.length ? "Waiting for your approval" : "Review requirements below"}</span></div>
+          <div className="progress-track"><i style={{ width: `${(completedStages / 3) * 100}%` }} /></div>
+        </div>
         <div className="agent-grid">
           <AgentCard agent="triage" run={latestRuns.triage} gate={detail.workflow.triage} />
           <AgentCard agent="traceability" run={latestRuns.traceability} gate={detail.workflow.traceability} />
           <AgentCard agent="escalation" run={latestRuns.escalation} gate={detail.workflow.escalation} />
         </div>
-        {user.role === "importer_investigator" && (
-          <div className="action-row top-gap">
-            <button className="button button-secondary" disabled={agentRunning || !detail.workflow.triage.can_run} title={detail.workflow.triage.blocked_reason ?? undefined} onClick={() => void start("triage")}>Run Triage Agent</button>
-            <button className="button button-secondary" disabled={agentRunning || !detail.workflow.traceability.can_run} title={detail.workflow.traceability.blocked_reason ?? undefined} onClick={() => void start("traceability")}>Run Traceability Agent</button>
-            <button className="button button-primary" disabled={agentRunning || !detail.workflow.escalation.can_run} title={detail.workflow.escalation.blocked_reason ?? undefined} onClick={() => void start("escalation")}>Run Escalation Agent</button>
-          </div>
-        )}
+        {user.role === "importer_investigator" && nextStage && <div className="next-action-panel">
+          <span className="next-action-icon">{stageMeta[nextStage].number}</span>
+          <div><small>Recommended next action</small><h3>{stageMeta[nextStage].action}</h3><p>{stageMeta[nextStage].description}</p></div>
+          <button className="button button-primary" disabled={agentRunning} onClick={() => void start(nextStage)}>{agentRunning ? "Working…" : stageMeta[nextStage].action}</button>
+        </div>}
+        {user.role === "importer_investigator" && availableOtherStages.length > 0 && <details className="other-actions"><summary>Other available checks</summary><div className="action-row">{availableOtherStages.map((stage) => <button key={stage} className="button button-secondary" disabled={agentRunning} onClick={() => void start(stage)}>{stageMeta[stage].action}</button>)}</div></details>}
       </section>
-      {agentRunning && <div className="alert" role="status">Agent investigation is running. This page refreshes automatically until it finishes or needs human review.</div>}
+      {agentRunning && <div className="alert working-alert" role="status"><strong>Evidence check in progress</strong><span>This page updates automatically. You can stay here while records are checked.</span></div>}
       {user.role === "importer_investigator" && <>
-        {Object.entries(detail.workflow).map(([stage, step]) => step.blocked_reason && <p className="muted" key={stage}><strong>{label(stage)}:</strong> {step.blocked_reason}</p>)}
+        {Object.entries(detail.workflow).some(([, step]) => Boolean(step.blocked_reason)) && <section className="requirements-panel"><span className="eyebrow">What must happen next</span>{Object.entries(detail.workflow).map(([stage, step]) => step.blocked_reason && <div key={stage}><span>{stageMeta[stage as keyof typeof stageMeta].number}</span><p><strong>{stageMeta[stage as keyof typeof stageMeta].title}</strong>{stakeholderText(step.blocked_reason)}</p></div>)}</section>}
         {pending.map((proposal) => <ProposalReview key={proposal.id} proposal={proposal} caseId={detail.case.id} onDone={refresh} />)}
         {detail.case.status !== "closed" && <CaseInformation key={detail.case.id} detail={detail} onDone={refresh} />}
       </>}
@@ -537,7 +630,7 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
       <section className="panel">
         <div className="section-heading"><div><span className="eyebrow">Audit trail</span><h2>Case timeline</h2></div><span className="muted">{detail.timeline.length} events</span></div>
         <div className="timeline">
-          {detail.timeline.map((event) => <div className="timeline-item" key={event.id}><span className="timeline-dot" /><div><strong>{label(event.event_type)}</strong><small>{formatDate(event.created_at)}</small></div></div>)}
+          {detail.timeline.map((event) => <div className="timeline-item" key={event.id}><span className="timeline-dot" /><div><strong>{stakeholderText(label(event.event_type))}</strong><small>{formatDate(event.created_at)}</small></div></div>)}
         </div>
       </section>
     </div>
@@ -568,13 +661,24 @@ function StaffApp({ user, onLogout }: { user: User; onLogout: () => void }) {
   }, [user.role]);
   return (
     <div className="app-shell">
-      <header className="app-bar"><div className="brand"><span className="brand-mark">BB</span><span>BatchBridge</span></div><div className="user-block"><div><strong>{user.display_name}</strong><span>{label(user.role)}</span></div><button className="button button-ghost" onClick={onLogout}>Sign out</button></div></header>
-      {user.role === "manufacturer_reviewer" ? <ManufacturerInbox /> : (
-        <div className="dashboard-grid">
-          <aside className="case-list"><div className="list-heading"><span className="eyebrow">Operational queue</span><h2>Cases</h2><span>{cases.length} active records</span></div>{cases.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><div><strong>{item.public_id}</strong><span>{item.product_name}</span></div><Pill value={item.status} /><small>Lot {item.batch_number ?? "unknown"}</small></button>)}</aside>
-          <main>{selected ? <CaseWorkspace user={user} summary={selected} /> : <div className="empty-state">No cases are available for this organization.</div>}</main>
-        </div>
-      )}
+      <aside className="app-sidebar">
+        <div className="brand brand-inverse"><span className="brand-mark"><i /><i /><i /></span><span>Batch<span className="brand-accent">Bridge</span></span></div>
+        <nav className="side-navigation" aria-label="Workspace">
+          <span className="side-label">Workspace</span>
+          <span className="side-item active"><b>□</b> {user.role === "manufacturer_reviewer" ? "Escalations" : "Investigations"}<i>{user.role === "manufacturer_reviewer" ? "" : cases.length}</i></span>
+        </nav>
+        <div className="sidebar-status"><i /><span><strong>System operational</strong><small>Evidence services connected</small></span></div>
+        <div className="sidebar-user"><span>{user.display_name.slice(0, 2).toUpperCase()}</span><div><strong>{user.display_name}</strong><small>{label(user.role)}</small></div><button onClick={onLogout} aria-label="Sign out">↗</button></div>
+      </aside>
+      <div className="app-surface">
+        <header className="app-bar"><div><span className="app-kicker">Operations console</span><strong>{user.role === "manufacturer_reviewer" ? "Manufacturer review" : "Food safety investigations"}</strong></div><div className="bar-actions"><span className="live-indicator"><i /> Live records</span><button className="icon-button" onClick={onLogout} aria-label="Sign out" title="Sign out">↗</button></div></header>
+        {user.role === "manufacturer_reviewer" ? <ManufacturerInbox /> : (
+          <div className="dashboard-grid">
+            <aside className="case-list"><div className="list-heading"><span className="eyebrow">Operational queue</span><h2>Cases</h2><span>{cases.length} active records</span></div>{cases.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><div><strong>{item.public_id}</strong><span>{item.product_name}</span></div><Pill value={item.status} /><small>Lot {item.batch_number ?? "unknown"}</small></button>)}</aside>
+            <main>{selected ? <CaseWorkspace user={user} summary={selected} /> : <div className="empty-state">No cases are available for this organization.</div>}</main>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -585,7 +689,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   useEffect(() => { void api.me().then(setUser).catch(() => undefined).finally(() => setLoading(false)); }, []);
   async function logout() { await api.logout(); setUser(null); setScreen("public"); }
-  if (loading) return <div className="loading-screen"><span className="brand-mark large">BB</span><p>Loading trusted records…</p></div>;
+  if (loading) return <div className="loading-screen"><span className="brand-mark large"><i /><i /><i /></span><p>Loading trusted records…</p></div>;
   if (user) return <StaffApp user={user} onLogout={() => void logout()} />;
   if (screen === "login") return <Login onSuccess={setUser} onBack={() => setScreen("public")} />;
   return <PublicReport onLogin={() => setScreen("login")} />;
