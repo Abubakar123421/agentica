@@ -53,7 +53,17 @@ The container listens on `0.0.0.0:$PORT`. All durable state is stored in Postgre
 - Manufacturer escalation requires an approved batch proposal and at least one human retailer
   finding. The importer makes the final case decision.
 
-The interactive OpenAPI contract at `/docs` covers the full API. See `CONTEXT.md` for stable product
-rules, `IMPLEMENTATION_PLAN.md` for progress, `FRONTEND_REFERENCE.md` for the saved VoltAgent design
-reference, and `DEPLOYMENT.md` for Alternate Clouds commands.
+The interactive OpenAPI contract at `/docs` covers the full API.
+
+## Project documentation
+
+- [`AGENTS.md`](AGENTS.md): project invariants and coding handoff for future agents.
+- [`CONTEXT.md`](CONTEXT.md): stable decisions, roles, safety rules, and demo dataset.
+- [`PRODUCT_SPEC.md`](PRODUCT_SPEC.md): complete use case, scope, requirements, and success criteria.
+- [`ARCHITECTURE.md`](ARCHITECTURE.md): components, trust boundaries, data flow, and deployment shape.
+- [`API_REFERENCE.md`](API_REFERENCE.md): endpoint and MCP tool map.
+- [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md): checklist from product scope through submission.
+- [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): judge-ready story, checks, and fallback path.
+- [`FRONTEND_REFERENCE.md`](FRONTEND_REFERENCE.md): responsive UI direction.
+- [`DEPLOYMENT.md`](DEPLOYMENT.md): Alternate Clouds setup and verification.
 
