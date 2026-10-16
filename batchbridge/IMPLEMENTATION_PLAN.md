@@ -44,7 +44,9 @@
 - [x] Add structured results and per-agent MCP tool allowlists.
 - [x] Require a second importer approval for the escalation-agent evidence packet.
 - [x] Keep exact shipment matching deterministic and database-backed.
-- [x] Add an optional bounded Groq assessment with deterministic fallback.
+- [x] Add bounded Groq tool-calling investigations for all three agents.
+- [x] Validate model decisions against MCP evidence; never accept invented shipment recipients.
+- [x] Label execution mode and require explicit demo mode for offline simulations.
 - [x] Store runs, proposals, confidence, evidence, and errors.
 - [x] Enforce an explicit human approval boundary before any proposed action is applied.
 - [x] Expose per-agent MCP tool-call traces in the case detail response and frontend.

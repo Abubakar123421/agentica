@@ -156,6 +156,7 @@ class AgentRun(Base):
     thread_id: Mapped[str] = mapped_column(String(100), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(30), index=True)
     result: Mapped[dict[str, Any] | None] = mapped_column(JsonType, nullable=True)
+    input_snapshot: Mapped[dict[str, Any]] = mapped_column(JsonType, default=dict)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_by_user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

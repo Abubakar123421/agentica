@@ -30,6 +30,7 @@ export type AgentRun = {
 };
 
 export type Proposal = {
+  review_block_reason: string | null;
   id: string;
   type: string;
   payload: Record<string, unknown>;
@@ -42,6 +43,7 @@ export type Inspection = {
   id: string;
   case_id?: string;
   retailer_id?: string;
+  retailer_name?: string;
   status: string;
   finding: string | null;
   notes: string | null;
@@ -58,12 +60,27 @@ export type TimelineEvent = {
 };
 
 export type CaseDetail = {
+  workflow: Record<AgentRun["agent_type"], { can_run: boolean; blocked_reason: string | null; latest_proposal_id: string | null }>;
+  manufacturer_response: string | null;
   case: CaseSummary;
   description: string;
   proposals: Proposal[];
   inspections: Inspection[];
   timeline: TimelineEvent[];
   agent_runs: AgentRun[];
+  evidence: { id: string; filename: string; content_type: string; url: string }[];
+  retailer_review: { decision: string; notes: string } | null;
+  demo_verification: DemoBarcodeMatch | null;
+};
+
+export type DemoBarcodeMatch = {
+  simulated: boolean;
+  barcode: string;
+  sku: string;
+  product_name: string;
+  product_id: string;
+  batch_number: string;
+  batch_id: string;
 };
 
 export type Escalation = {

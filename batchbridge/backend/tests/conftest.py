@@ -7,6 +7,8 @@ os.environ["DATABASE_URL"] = f"sqlite:///{TEST_DB}"
 os.environ["SESSION_SECRET"] = "test-session-secret"
 os.environ["DEMO_PASSWORD"] = "BatchBridgeDemo2026!"
 os.environ["SEED_DEMO_DATA"] = "true"
+os.environ["AGENT_MODE"] = "demo"
+os.environ["GROQ_API_KEY"] = ""
 
 import pytest  # noqa: E402
 from app.database import Base, engine  # noqa: E402

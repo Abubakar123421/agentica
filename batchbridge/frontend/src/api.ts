@@ -1,4 +1,4 @@
-import type { CaseDetail, CaseSummary, Escalation, Inspection, User } from "./types";
+import type { CaseDetail, CaseSummary, DemoBarcodeMatch, Escalation, Inspection, User } from "./types";
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
@@ -27,6 +27,15 @@ export const api = {
       "/api/v1/reports",
       { method: "POST", body: JSON.stringify(payload) },
     ),
+  photoReport: (payload: FormData) =>
+    request<{ case_id: string; tracking_token: string; tracking_url: string; status: string }>(
+      "/api/v1/reports/photo", { method: "POST", body: payload },
+    ),
+  retailers: () => request<{ code: string; name: string }[]>("/api/v1/catalog/retailers"),
+  lookupBarcode: (caseId: string, barcode: string) =>
+    request<DemoBarcodeMatch>(`/api/v1/cases/${caseId}/demo-barcode`, {
+      method: "POST", body: JSON.stringify({ barcode }),
+    }),
   track: (token: string) =>
     request<{
       case_id: string;
@@ -35,6 +44,10 @@ export const api = {
       safety_verdict: string;
       updated_at: string;
     }>(`/api/v1/tracking/${encodeURIComponent(token)}`),
+  addInformation: (caseId: string, notes: string, productName?: string, batchNumber?: string) =>
+    request(`/api/v1/cases/${caseId}/information`, { method: "POST", body: JSON.stringify({ notes, product_name: productName || undefined, batch_number: batchNumber || undefined }) }),
+  closeCase: (caseId: string, notes: string, safetyVerdict: string) =>
+    request(`/api/v1/cases/${caseId}/status`, { method: "PATCH", body: JSON.stringify({ status: "closed", notes, safety_verdict: safetyVerdict }) }),
   cases: () => request<CaseSummary[]>("/api/v1/cases"),
   caseDetail: (caseId: string) => request<CaseDetail>(`/api/v1/cases/${caseId}`),
   startAgent: (caseId: string, agent: "triage" | "traceability" | "escalation") => {
@@ -49,10 +62,10 @@ export const api = {
       { method: "POST" },
     );
   },
-  reviewCase: (caseId: string, decision: string, notes: string) =>
+  reviewCase: (caseId: string, decision: string, notes: string, demoBarcode?: string) =>
     request(`/api/v1/cases/${caseId}/retailer-review`, {
       method: "POST",
-      body: JSON.stringify({ decision, notes }),
+      body: JSON.stringify({ decision, notes, demo_barcode: demoBarcode }),
     }),
   approve: (caseId: string, proposalId: string, decision: string, notes: string) =>
     request(`/api/v1/cases/${caseId}/approvals`, {

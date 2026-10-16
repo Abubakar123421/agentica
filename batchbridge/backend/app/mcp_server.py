@@ -14,9 +14,10 @@ from app.models import (
     Organization,
     Product,
     ProductAlias,
-    Proposal,
+    RetailerReview,
     Shipment,
 )
+from app.services.case_workflow import approved_latest, shipment_plan_current
 
 mcp = FastMCP(
     "BatchBridge Evidence Server",
@@ -37,6 +38,15 @@ def get_case(case_id: str) -> dict:
             "case_id": case.id,
             "public_id": case.public_id,
             "source": case.source,
+            "retailer_review": (
+                review.decision
+                if (
+                    review := db.scalar(
+                        select(RetailerReview).where(RetailerReview.case_id == case.id)
+                    )
+                )
+                else None
+            ),
             "product_name": case.product_name,
             "batch_number": case.batch_number,
             "description": case.description,
@@ -148,6 +158,15 @@ def find_related_reports(product_id: str, batch_number: str, exclude_case_id: st
                 "case_id": case.id,
                 "public_id": case.public_id,
                 "source": case.source,
+                "retailer_review": (
+                    review.decision
+                    if (
+                        review := db.scalar(
+                            select(RetailerReview).where(RetailerReview.case_id == case.id)
+                        )
+                    )
+                    else None
+                ),
                 "status": case.status,
                 "created_at": case.created_at.isoformat(),
             }
@@ -234,20 +253,15 @@ def get_inspection_findings(case_id: str) -> list[dict]:
 def get_approved_traceability(case_id: str) -> dict:
     """Return the latest human-approved product and batch trace for a case."""
     with SessionLocal() as db:
-        row = db.execute(
-            select(Proposal, Approval)
-            .join(Approval, Approval.proposal_id == Proposal.id)
-            .where(
-                Proposal.case_id == case_id,
-                Proposal.type == "retailer_inspections",
-                Proposal.status == "approved",
-                Approval.decision == "approved",
-            )
-            .order_by(Proposal.version.desc())
-        ).first()
-        if not row:
+        case = db.get(Case, case_id)
+        proposal = approved_latest(db, case, "traceability") if case else None
+        if (
+            not proposal
+            or not approved_latest(db, case, "triage")
+            or not shipment_plan_current(db, case, proposal)
+        ):
             return {"found": False, "case_id": case_id}
-        proposal, approval = row
+        approval = db.scalar(select(Approval).where(Approval.proposal_id == proposal.id))
         return {
             "found": True,
             "proposal_id": proposal.id,
@@ -283,9 +297,7 @@ def get_case_timeline(case_id: str) -> list[dict]:
     """Return event provenance without actor contact details."""
     with SessionLocal() as db:
         rows = db.scalars(
-            select(AuditEvent)
-            .where(AuditEvent.case_id == case_id)
-            .order_by(AuditEvent.created_at)
+            select(AuditEvent).where(AuditEvent.case_id == case_id).order_by(AuditEvent.created_at)
         ).all()
         return [
             {

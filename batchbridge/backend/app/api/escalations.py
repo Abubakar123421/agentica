@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.audit import add_audit
 from app.database import get_db
 from app.dependencies import require_roles
-from app.models import Case, Escalation, Proposal, User
+from app.models import Case, Escalation, User
 from app.schemas import EscalationCreate, ManufacturerResponseCreate
 
 router = APIRouter(prefix="/escalations", tags=["manufacturer escalations"])
@@ -26,41 +26,10 @@ def create_escalation(
     existing = db.scalar(select(Escalation).where(Escalation.case_id == case.id))
     if existing:
         return {"id": existing.id, "status": existing.status, "idempotent": True}
-    proposal = db.scalar(
-        select(Proposal)
-        .where(
-            Proposal.case_id == case.id,
-            Proposal.type == "manufacturer_escalation_packet",
-            Proposal.status == "approved",
-        )
-        .order_by(Proposal.version.desc())
+    raise HTTPException(
+        status_code=409,
+        detail="Approve the latest manufacturer proposal through case approvals",
     )
-    if not proposal:
-        raise HTTPException(
-            status_code=409,
-            detail="An approved escalation-agent proposal is required",
-        )
-    packet = dict(proposal.payload["manufacturer_packet"])
-    if payload.notes:
-        packet["importer_notes"] = payload.notes
-    escalation = Escalation(
-        case_id=case.id,
-        manufacturer_id=proposal.payload["manufacturer_id"],
-        packet=packet,
-        approved_by_user_id=user.id,
-    )
-    db.add(escalation)
-    case.status = "manufacturer_review"
-    db.flush()
-    add_audit(
-        db,
-        case.id,
-        "manufacturer_escalation_sent",
-        user.id,
-        {"escalation_id": escalation.id, "manufacturer_id": escalation.manufacturer_id},
-    )
-    db.commit()
-    return {"id": escalation.id, "status": escalation.status, "idempotent": False}
 
 
 @router.get("")

@@ -25,6 +25,7 @@ class Settings:
     allowed_origins: tuple[str, ...]
     seed_demo_data: bool
     demo_password: str
+    agent_mode: str
     session_hours: int = 12
     max_evidence_bytes: int = 5 * 1024 * 1024
 
@@ -40,11 +41,15 @@ def get_settings() -> Settings:
     origins = tuple(
         origin.strip()
         for origin in os.getenv(
-            "ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:8000"
+            "ALLOWED_ORIGINS",
+            "http://localhost:5173,http://localhost:8000,http://127.0.0.1:5173,http://127.0.0.1:8000",
         ).split(",")
         if origin.strip()
     )
     cookie_secure = _as_bool("COOKIE_SECURE", False)
+    agent_mode = os.getenv("AGENT_MODE", "llm").lower()
+    if agent_mode not in {"llm", "demo"}:
+        raise RuntimeError("AGENT_MODE must be llm or demo")
     session_secret = os.getenv("SESSION_SECRET", "development-only-secret")
     if cookie_secure and session_secret == "development-only-secret":
         raise RuntimeError("SESSION_SECRET must be set when COOKIE_SECURE=true")
@@ -58,4 +63,5 @@ def get_settings() -> Settings:
         allowed_origins=origins,
         seed_demo_data=_as_bool("SEED_DEMO_DATA", True),
         demo_password=os.getenv("DEMO_PASSWORD", "BatchBridgeDemo2026!"),
+        agent_mode=agent_mode,
     )

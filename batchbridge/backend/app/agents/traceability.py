@@ -2,8 +2,9 @@ from typing import Any
 
 from mcp import ClientSession
 
-from app.agents.common import assess_with_groq
+from app.agents.agentic import run_groq_agent
 from app.agents.schemas import TraceabilityResult
+from app.config import get_settings
 from app.services.mcp_client import EvidenceMCPClient
 
 
@@ -24,6 +25,8 @@ def _match_product(case: dict, products: list[dict]) -> tuple[dict | None, str]:
 async def run_traceability_agent(
     client: EvidenceMCPClient, session: ClientSession, case_id: str
 ) -> dict[str, Any]:
+    if get_settings().agent_mode == "llm":
+        return await run_groq_agent("traceability", client, session, case_id)
     case = await client.call("traceability", session, "get_case", {"case_id": case_id})
     products = await client.call(
         "traceability", session, "search_products", {"query": case.get("product_name", "")}
@@ -79,17 +82,7 @@ async def run_traceability_agent(
             "Every proposed retailer was copied from an exact batch shipment record.",
         ]
     )
-    ai_assessment = await assess_with_groq(
-        "traceability",
-        {
-            "case": case,
-            "matched_product": selected,
-            "batch": batch,
-            "shipments": shipments,
-            "related_report_count": len(related),
-            "missing": missing,
-        },
-    )
+    ai_assessment = None
     return TraceabilityResult(
         type=proposal_type,
         case_id=case_id,
@@ -112,4 +105,4 @@ async def run_traceability_agent(
         ],
         ai_assessment=ai_assessment,
         tool_calls=client.trace,
-    ).model_dump()
+    ).model_dump() | {"execution_mode": "demo_rules", "model": None}

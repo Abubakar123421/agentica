@@ -13,8 +13,9 @@ human-approved evidence packet to the manufacturer.
 
 ## Primary use case
 
-1. A customer reports a suspected issue through the public portal or to the retailer.
-2. A retailer food safety manager inspects the item, adds evidence, and forwards the case.
+1. A customer selects a supermarket and uploads product photos with a description of the problem.
+2. The supermarket food safety officer reviews the images, previews a simulated barcode match,
+   verifies the product and batch, and forwards the case with notes. This starts triage.
 3. The importer starts an investigation.
 4. The agent uses read-only MCP tools to match the product and batch and retrieve exact shipment
    recipients.
@@ -54,8 +55,12 @@ but all safety decisions remain attributable to a named human reviewer.
 
 ### Reporting
 
-- Accept product name, description, purchase retailer, purchase date, optional batch number,
-  reporter contact details, and optional image or PDF evidence.
+- The customer UI accepts a supermarket, description, 1–3 JPEG/PNG photos (5 MB each), and optional
+  purchase date/contact details. It does not ask the customer for product or batch codes.
+- Retain the structured JSON reporting endpoint for existing clients and tests.
+- Offer generated fictional packaging for the demo; clearly label the officer barcode lookup as
+  simulated. Store a human verification event and use database-backed product/lot fixtures.
+- For photo reports, require officer verification and forwarding before importer traceability.
 - Generate a public case ID and a random private tracking token.
 - Allow retailer staff to create a case from an inspection without a customer report.
 
@@ -65,13 +70,16 @@ but all safety decisions remain attributable to a named human reviewer.
 - Resolve a batch only from product identity plus manufacturer lot number.
 - List only retailers present in the importer's shipment records for the matched batch.
 - Show uncertainty, sources, and the reason for each suggested action.
-- Continue deterministically when the optional LLM is unavailable.
+- Use Groq to choose read-only MCP tools and produce investigation recommendations in LLM mode.
+- Validate operational identifiers and retailer assignments against actual MCP evidence.
+- Show model summaries, follow-up questions, execution mode, model name and tool traces.
+- Show failures explicitly when the LLM is unavailable; offline simulation requires `AGENT_MODE=demo`.
 
 ### Human gates
 
 - An importer approves or rejects the agent proposal.
 - Retailer checks are created only after approval.
-- Manufacturer escalation requires an approved proposal and at least one completed human finding.
+- Manufacturer escalation requires an approved proposal and completed findings from every assigned retailer.
 - The importer owns the final safety verdict and closure decision.
 
 ### Audit and privacy
@@ -107,3 +115,21 @@ tracked separately and starts as `unconfirmed`.
 - Live ERP, email, SMS, or barcode integrations.
 - Multi-importer software-as-a-service tenancy.
 - Production disaster recovery guarantees.
+
+## Backend workflow enforcement (2026-10-16)
+
+- Every triage result requires a new importer approval; supermarket forwarding is a separate decision.
+- Approvals apply only to the latest run and its saved input versions. Old decisions never approve new results.
+- Traceability requires current approved triage without an outstanding information request.
+- Escalation requires a current approved shipment plan and completed findings from all assigned supermarkets.
+- More-check recommendations reopen the selected supermarket tasks after approval; monitoring sends no manufacturer packet.
+- Only an approved manufacturer-escalation recommendation creates the manufacturer inbox item.
+- `POST /api/v1/cases/{id}/information` accepts notes and optional corrected product_name/batch_number.
+  Saving information invalidates earlier proposals; rerun triage and review the new result.
+  Identity corrections are blocked once retailer tasks exist.
+- Case detail includes backend-authoritative `workflow` gates, proposal `review_block_reason`,
+  named supermarket progress, and the manufacturer's response.
+- Final verdict/closure requires a manufacturer response and reviewer notes. Operational statuses
+  cannot bypass proposal approvals through the status endpoint.
+- Existing historical decisions are retained. Runs predating input snapshots need a new run and review.
+- Notifications remain in-app task queues; external email/SMS dispatch is not implemented.

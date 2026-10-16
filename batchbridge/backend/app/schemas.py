@@ -82,6 +82,11 @@ class ApprovalRequest(BaseModel):
 class RetailerReviewRequest(BaseModel):
     decision: Literal["forwarded", "needs_customer_information", "unable_to_verify"]
     notes: str = Field(min_length=3, max_length=5000)
+    demo_barcode: str | None = Field(default=None, max_length=100)
+
+
+class DemoBarcodeRequest(BaseModel):
+    barcode: str = Field(min_length=1, max_length=100)
 
 
 class FindingRequest(BaseModel):
@@ -103,7 +108,14 @@ class CsvImportResult(BaseModel):
     errors: list[dict[str, Any]]
 
 
+class CaseInformationCreate(BaseModel):
+    notes: str = Field(min_length=3, max_length=5000)
+    product_name: str | None = Field(default=None, min_length=2, max_length=200)
+    batch_number: str | None = Field(default=None, min_length=1, max_length=100)
+
+
 class StatusUpdate(BaseModel):
+    notes: str | None = Field(default=None, max_length=2000)
     status: Literal[
         "under_review",
         "waiting_for_information",

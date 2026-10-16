@@ -54,6 +54,7 @@ acc services env set APP_SERVICE_ID APP_BASE_URL https://APP-SLUG-app.alternatef
 acc services env set APP_SERVICE_ID SESSION_SECRET A_LONG_RANDOM_VALUE
 acc services env set APP_SERVICE_ID GROQ_API_KEY YOUR_GROQ_KEY
 acc services env set APP_SERVICE_ID GROQ_MODEL openai/gpt-oss-20b
+acc services env set APP_SERVICE_ID AGENT_MODE llm
 acc services env set APP_SERVICE_ID COOKIE_SECURE true
 acc services env set APP_SERVICE_ID ALLOWED_ORIGINS https://APP-SLUG-app.alternatefutures.ai
 acc services env set APP_SERVICE_ID SEED_DEMO_DATA true

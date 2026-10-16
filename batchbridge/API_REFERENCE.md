@@ -10,6 +10,7 @@ and Swagger UI. The running server provides the authoritative interactive contra
 | `GET` | `/health/live` | Process liveness |
 | `GET` | `/health/ready` | Database readiness |
 | `POST` | `/api/v1/reports` | Create a customer report and tracking token |
+| `POST` | `/api/v1/reports/photo` | Atomically submit supermarket, description and 1–3 JPEG/PNG photos; no customer product/batch entry |
 | `GET` | `/api/v1/tracking/{tracking_token}` | View public case progress |
 | `POST` | `/api/v1/reports/{public_id}/evidence` | Upload report evidence with the tracking token |
 
@@ -45,6 +46,7 @@ Browser clients must send cookies on authenticated requests.
 | `POST` | `/api/v1/cases/officer-report` | Create a case from a retailer inspection |
 | `POST` | `/api/v1/cases/{case_id}/triage` | Run or retrieve the bounded triage agent |
 | `POST` | `/api/v1/cases/{case_id}/retailer-review` | Review and forward or hold a customer report |
+| `POST` | `/api/v1/cases/{case_id}/demo-barcode` | Officer-only preview of a fictional barcode-to-product/lot mapping for the case's supermarket |
 | `GET` | `/api/v1/inspections` | List inspections assigned to the signed-in retailer |
 | `POST` | `/api/v1/inspections/{inspection_id}/finding` | Submit a human stock-check finding |
 
@@ -57,15 +59,26 @@ Browser clients must send cookies on authenticated requests.
 | `POST` | `/api/v1/imports/shipments` | Validate and import shipment records |
 | `PATCH` | `/api/v1/cases/{case_id}/status` | Update case status or final human verdict |
 | `POST` | `/api/v1/cases/{case_id}/analysis` | Queue the MCP-grounded traceability agent |
-| `POST` | `/api/v1/cases/{case_id}/escalation-analysis` | Queue the escalation agent after a human finding |
+| `POST` | `/api/v1/cases/{case_id}/escalation-analysis` | Queue escalation after every assigned retailer responds |
 | `GET` | `/api/v1/cases/{case_id}/analysis/{run_id}` | Poll investigation status and result |
 | `POST` | `/api/v1/cases/{case_id}/approvals` | Approve or reject an agent proposal |
-| `POST` | `/api/v1/escalations/cases/{case_id}` | Idempotently retrieve or create from an approved escalation proposal |
+| `POST` | `/api/v1/escalations/cases/{case_id}` | Retrieve an existing escalation; creation requires case proposal approval |
 
-Manufacturer escalation requires an approved traceability proposal, at least one completed retailer
-finding, and importer approval of the escalation-agent packet.
+Manufacturer escalation requires an approved traceability proposal, completed findings from every assigned retailer, and importer approval of the escalation-agent packet.
 
-Triage is automatically queued for public reports and retailer-originated reports. Retailer staff
+For photo reports (`source=customer_photo`), triage starts after officer verification and forwarding.
+The photo endpoint accepts multipart fields `retailer_code`, `description`, optional `reporter_name`,
+`reporter_email`, `purchase_date`, and repeated `files`. Files must be JPEG/PNG, at most 5 MB each.
+All photos are validated before anything is saved.
+
+The barcode endpoint takes `{"barcode":"DEMO-CHOC-38"}` and returns `simulated`, product and batch
+identifiers, SKU, product name, and batch number. It checks the supermarket received that batch.
+Forwarding a photo case requires `demo_barcode` in the retailer-review request, alongside `decision`
+and `notes`; the server revalidates the match and records `demo_barcode_verified`. A lookup alone
+does not update the case. Case detail now includes `evidence`, `retailer_review`, and
+`demo_verification`. Evidence URLs remain authenticated and scoped to authorized staff.
+
+Triage is automatically queued on creation for legacy structured and retailer reports. Retailer staff
 can also run triage and forward or hold a customer report. Traceability can start after retailer
 forwarding or importer approval of triage. Only the importer can approve proposals, create retailer
 checks, or approve the manufacturer packet. A traceability proposal creates checks only when
@@ -97,6 +110,12 @@ The stdio server in `backend/app/mcp_server.py` exposes these read-only tools:
 
 Tool output preserves database identifiers. Reporter contact details are intentionally absent.
 
+In `AGENT_MODE=llm`, the Groq model selects tool calls and submits a proposal validated against MCP
+results. Agent results include `execution_mode=llm`, `model`, `llm_turns`, and `ai_assessment` with a
+summary, confidence and unanswered questions. Tool traces contain successful evidence reads. API
+or validation failures mark the run failed, without switching to rules. `AGENT_MODE=demo` is the
+explicit offline simulation path and marks results `execution_mode=demo_rules`.
+
 ### Per-agent tool allowlists
 
 | Agent | MCP tools available |
@@ -107,3 +126,21 @@ Tool output preserves database identifiers. Reporter contact details are intenti
 
 The MCP server is read-only. Approvals, task creation, escalation delivery, and final verdicts are
 performed by role-checked API handlers and recorded in the case timeline.
+
+## Backend workflow enforcement (2026-10-16)
+
+- Every triage result requires a new importer approval; supermarket forwarding is a separate decision.
+- Approvals apply only to the latest run and its saved input versions. Old decisions never approve new results.
+- Traceability requires current approved triage without an outstanding information request.
+- Escalation requires a current approved shipment plan and completed findings from all assigned supermarkets.
+- More-check recommendations reopen the selected supermarket tasks after approval; monitoring sends no manufacturer packet.
+- Only an approved manufacturer-escalation recommendation creates the manufacturer inbox item.
+- `POST /api/v1/cases/{id}/information` accepts notes and optional corrected product_name/batch_number.
+  Saving information invalidates earlier proposals; rerun triage and review the new result.
+  Identity corrections are blocked once retailer tasks exist.
+- Case detail includes backend-authoritative `workflow` gates, proposal `review_block_reason`,
+  named supermarket progress, and the manufacturer's response.
+- Final verdict/closure requires a manufacturer response and reviewer notes. Operational statuses
+  cannot bypass proposal approvals through the status endpoint.
+- Existing historical decisions are retained. Runs predating input snapshots need a new run and review.
+- Notifications remain in-app task queues; external email/SMS dispatch is not implemented.

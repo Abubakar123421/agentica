@@ -2,8 +2,9 @@ from typing import Any
 
 from mcp import ClientSession
 
-from app.agents.common import assess_with_groq
+from app.agents.agentic import run_groq_agent
 from app.agents.schemas import TriageResult
+from app.config import get_settings
 from app.services.mcp_client import EvidenceMCPClient
 
 
@@ -23,6 +24,8 @@ def _select_product(case: dict, products: list[dict]) -> dict | None:
 async def run_triage_agent(
     client: EvidenceMCPClient, session: ClientSession, case_id: str
 ) -> dict[str, Any]:
+    if get_settings().agent_mode == "llm":
+        return await run_groq_agent("triage", client, session, case_id)
     case = await client.call("triage", session, "get_case", {"case_id": case_id})
     products = await client.call(
         "triage", session, "search_products", {"query": case.get("product_name", "")}
@@ -69,18 +72,7 @@ async def run_triage_agent(
     if missing:
         rationale.append("Missing fields prevent reliable product and batch traceability.")
 
-    ai_assessment = await assess_with_groq(
-        "triage",
-        {
-            "source": case.get("source"),
-            "product_name": case.get("product_name"),
-            "batch_number": case.get("batch_number"),
-            "description": case.get("description"),
-            "possible_products": products,
-            "related_report_count": len(related),
-            "missing_fields": missing,
-        },
-    )
+    ai_assessment = None
     return TriageResult(
         case_id=case_id,
         possible_product_ids=[product["id"] for product in products],
@@ -94,4 +86,4 @@ async def run_triage_agent(
         evidence_references=[case_id, *[item["case_id"] for item in related]],
         ai_assessment=ai_assessment,
         tool_calls=client.trace,
-    ).model_dump()
+    ).model_dump() | {"execution_mode": "demo_rules", "model": None}

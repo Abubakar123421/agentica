@@ -2,14 +2,17 @@ from typing import Any
 
 from mcp import ClientSession
 
-from app.agents.common import assess_with_groq
+from app.agents.agentic import run_groq_agent
 from app.agents.schemas import EscalationResult
+from app.config import get_settings
 from app.services.mcp_client import EvidenceMCPClient
 
 
 async def run_escalation_agent(
     client: EvidenceMCPClient, session: ClientSession, case_id: str
 ) -> dict[str, Any]:
+    if get_settings().agent_mode == "llm":
+        return await run_groq_agent("escalation", client, session, case_id)
     case = await client.call("escalation", session, "get_case", {"case_id": case_id})
     trace = await client.call(
         "escalation", session, "get_approved_traceability", {"case_id": case_id}
@@ -31,9 +34,7 @@ async def run_escalation_agent(
     evidence = await client.call(
         "escalation", session, "get_case_evidence_metadata", {"case_id": case_id}
     )
-    timeline = await client.call(
-        "escalation", session, "get_case_timeline", {"case_id": case_id}
-    )
+    timeline = await client.call("escalation", session, "get_case_timeline", {"case_id": case_id})
     completed = [item for item in findings if item["status"] == "completed"]
     if not completed:
         raise ValueError("At least one completed retailer finding is required")
@@ -43,9 +44,7 @@ async def run_escalation_agent(
     no_issue = [item for item in completed if item["finding"] == "no_issue_observed"]
     conflicts = completed if observed and no_issue else []
     missing = [f"retailer_finding:{item['retailer_id']}" for item in pending]
-    recommendation = (
-        "prepare_manufacturer_escalation" if observed else "continue_monitoring"
-    )
+    recommendation = "prepare_manufacturer_escalation" if observed else "continue_monitoring"
     if pending and not observed:
         recommendation = "request_more_retailer_checks"
 
@@ -64,18 +63,11 @@ async def run_escalation_agent(
             "conflicting_findings": bool(conflicts),
         },
     }
-    ai_assessment = await assess_with_groq(
-        "escalation",
-        {
-            "product": product,
-            "batch": batch,
-            "distribution": shipments,
-            "findings": completed,
-            "pending_count": len(pending),
-            "evidence_count": len(evidence),
-        },
-    )
+    ai_assessment = None
     return EscalationResult(
+        type="manufacturer_escalation_packet"
+        if recommendation == "prepare_manufacturer_escalation"
+        else "monitoring",
         case_id=case_id,
         batch_id=batch["id"],
         completed_inspections=len(completed),
@@ -104,4 +96,4 @@ async def run_escalation_agent(
         ],
         ai_assessment=ai_assessment,
         tool_calls=client.trace,
-    ).model_dump()
+    ).model_dump() | {"execution_mode": "demo_rules", "model": None}

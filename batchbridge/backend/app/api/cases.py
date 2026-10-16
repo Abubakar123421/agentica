@@ -14,7 +14,9 @@ from app.models import (
     AuditEvent,
     Case,
     Escalation,
+    Evidence,
     Inspection,
+    Organization,
     Proposal,
     RetailerReview,
     User,
@@ -22,12 +24,16 @@ from app.models import (
 from app.schemas import (
     AnalysisStartResponse,
     ApprovalRequest,
+    CaseInformationCreate,
     CaseSummary,
+    DemoBarcodeRequest,
     OfficerReportCreate,
     RetailerReviewRequest,
     StatusUpdate,
 )
 from app.security import token_hash
+from app.services.case_workflow import proposal_block_reason, stage_block_reason, workflow_view
+from app.services.demo_barcodes import resolve_demo_barcode
 from app.services.investigation import (
     execute_investigation,
     queue_investigation,
@@ -119,10 +125,42 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
     agent_runs = db.scalars(
         select(AgentRun).where(AgentRun.case_id == case.id).order_by(AgentRun.created_at)
     ).all()
+    evidence = db.scalars(
+        select(Evidence).where(Evidence.case_id == case.id).order_by(Evidence.created_at)
+    ).all()
+    retailer_review = db.scalar(select(RetailerReview).where(RetailerReview.case_id == case.id))
     result = {
         "case": CaseSummary.model_validate(case).model_dump(mode="json"),
         "description": case.description,
+        "workflow": workflow_view(db, case),
+        "manufacturer_response": (
+            escalation.response
+            if (escalation := db.scalar(select(Escalation).where(Escalation.case_id == case.id)))
+            else None
+        ),
         "purchase_date": case.purchase_date,
+        "evidence": [
+            {
+                "id": item.id,
+                "filename": item.filename,
+                "content_type": item.content_type,
+                "url": f"/api/v1/evidence/{item.id}",
+            }
+            for item in evidence
+        ],
+        "retailer_review": (
+            {"decision": retailer_review.decision, "notes": retailer_review.notes}
+            if retailer_review
+            else None
+        ),
+        "demo_verification": next(
+            (
+                event.details
+                for event in reversed(timeline)
+                if event.event_type == "demo_barcode_verified"
+            ),
+            None,
+        ),
         "proposals": [
             {
                 "id": item.id,
@@ -130,6 +168,9 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
                 "payload": item.payload,
                 "status": item.status,
                 "version": item.version,
+                "review_block_reason": proposal_block_reason(db, case, item)
+                if item.status == "pending"
+                else None,
                 "created_at": item.created_at,
             }
             for item in proposals
@@ -138,6 +179,7 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
             {
                 "id": item.id,
                 "retailer_id": item.retailer_id,
+                "retailer_name": db.get(Organization, item.retailer_id).name,
                 "status": item.status,
                 "finding": item.finding,
                 "notes": item.notes,
@@ -174,10 +216,24 @@ def case_detail(case_id: str, user: User = Depends(current_user), db: Session = 
     return result
 
 
+@router.post("/{case_id}/demo-barcode")
+def lookup_demo_barcode(
+    case_id: str,
+    payload: DemoBarcodeRequest,
+    user: User = Depends(require_roles("retailer_safety_manager")),
+    db: Session = Depends(get_db),
+):
+    case = db.get(Case, case_id)
+    if not case or case.retailer_id != user.organization_id:
+        raise HTTPException(status_code=404, detail="Case not found")
+    return resolve_demo_barcode(db, payload.barcode, user.organization_id)
+
+
 @router.post("/{case_id}/retailer-review")
 def review_customer_case(
     case_id: str,
     payload: RetailerReviewRequest,
+    background_tasks: BackgroundTasks,
     user: User = Depends(require_roles("retailer_safety_manager")),
     db: Session = Depends(get_db),
 ):
@@ -190,50 +246,38 @@ def review_customer_case(
             RetailerReview.retailer_id == user.organization_id,
         )
     )
-    if existing:
+    if existing and (existing.decision == "forwarded" or existing.decision == payload.decision):
         return {
             "id": existing.id,
             "decision": existing.decision,
             "idempotent": True,
         }
-    review = RetailerReview(
-        case_id=case.id,
-        retailer_id=user.organization_id,
-        reviewer_id=user.id,
-        decision=payload.decision,
-        notes=payload.notes,
-    )
-    db.add(review)
+    if payload.decision == "forwarded" and case.source == "customer_photo":
+        if not payload.demo_barcode:
+            raise HTTPException(status_code=409, detail="Verify a demo barcode before forwarding")
+        match = resolve_demo_barcode(db, payload.demo_barcode, user.organization_id)
+        case.product_name = match["product_name"]
+        case.batch_number = match["batch_number"]
+        add_audit(db, case.id, "demo_barcode_verified", user.id, match)
+    review = existing
+    if not review:
+        review = RetailerReview(
+            case_id=case.id,
+            retailer_id=user.organization_id,
+            reviewer_id=user.id,
+            decision=payload.decision,
+            notes=payload.notes,
+        )
+        db.add(review)
+    else:
+        review.decision = payload.decision
+        review.notes = payload.notes
+        review.reviewer_id = user.id
     if payload.decision == "forwarded":
         case.status = "under_review"
     elif payload.decision == "needs_customer_information":
         case.status = "waiting_for_information"
     db.flush()
-    triage_proposal = db.scalar(
-        select(Proposal)
-        .join(AgentRun, AgentRun.id == Proposal.agent_run_id)
-        .where(
-            Proposal.case_id == case.id,
-            Proposal.status == "pending",
-            AgentRun.agent_type == "triage",
-        )
-        .order_by(Proposal.version.desc())
-    )
-    if triage_proposal and not db.scalar(
-        select(Approval).where(Approval.proposal_id == triage_proposal.id)
-    ):
-        triage_decision = "approved" if payload.decision == "forwarded" else "changes_requested"
-        db.add(
-            Approval(
-                proposal_id=triage_proposal.id,
-                reviewer_id=user.id,
-                decision=triage_decision,
-                notes=payload.notes,
-            )
-        )
-        triage_proposal.status = triage_decision
-        triage_run = db.get(AgentRun, triage_proposal.agent_run_id)
-        triage_run.status = "completed"
     add_audit(
         db,
         case.id,
@@ -246,8 +290,43 @@ def review_customer_case(
             "forwarded_to_importer": review.decision == "forwarded",
         },
     )
+    if payload.decision == "forwarded" and case.source == "customer_photo":
+        run, created = queue_investigation(db, case.id, "triage", user.id)
+        if created:
+            background_tasks.add_task(execute_investigation, run.id)
     db.commit()
     return {"id": review.id, "decision": review.decision, "idempotent": False}
+
+
+@router.post("/{case_id}/information")
+def add_case_information(
+    case_id: str,
+    payload: CaseInformationCreate,
+    user: User = Depends(require_roles("importer_investigator")),
+    db: Session = Depends(get_db),
+):
+    case = _get_authorized_case(db, user, case_id)
+    if case.status == "closed":
+        raise HTTPException(status_code=409, detail="This case is closed")
+    identity_changed = (
+        payload.product_name is not None and payload.product_name != case.product_name
+    ) or (payload.batch_number is not None and payload.batch_number != case.batch_number)
+    if identity_changed and db.scalar(select(Inspection.id).where(Inspection.case_id == case.id)):
+        raise HTTPException(
+            status_code=409,
+            detail="Identity cannot change after retailer checks are assigned. Create a new case.",
+        )
+    if payload.product_name:
+        case.product_name = payload.product_name.strip()
+    if payload.batch_number:
+        case.batch_number = payload.batch_number.strip()
+    case.description += "\nAdditional information: " + payload.notes.strip()
+    add_audit(db, case.id, "case_information_added", user.id, payload.model_dump(exclude_none=True))
+    db.commit()
+    return {
+        "case_id": case.id,
+        "message": "Information saved. Rerun triage and review the new proposal.",
+    }
 
 
 @router.patch("/{case_id}/status", response_model=CaseSummary)
@@ -258,6 +337,21 @@ def update_case_status(
     db: Session = Depends(get_db),
 ):
     case = _get_authorized_case(db, user, case_id)
+    if case.status == "closed":
+        raise HTTPException(status_code=409, detail="This case is closed")
+    if payload.status in {"retailer_checks", "manufacturer_review"}:
+        raise HTTPException(status_code=409, detail="This status requires an approved agent action")
+    if payload.status == "closed" or payload.safety_verdict:
+        response = db.scalar(
+            select(Escalation).where(
+                Escalation.case_id == case.id, Escalation.status == "responded"
+            )
+        )
+        if not response or not payload.notes or not payload.notes.strip():
+            raise HTTPException(
+                status_code=409,
+                detail="Manufacturer response and notes are required for a final verdict",
+            )
     old_status = case.status
     case.status = payload.status
     if payload.safety_verdict:
@@ -267,7 +361,12 @@ def update_case_status(
         case.id,
         "case_status_changed",
         user.id,
-        {"from": old_status, "to": case.status, "safety_verdict": case.safety_verdict},
+        {
+            "from": old_status,
+            "to": case.status,
+            "safety_verdict": case.safety_verdict,
+            "notes": payload.notes,
+        },
     )
     db.commit()
     return case
@@ -279,6 +378,9 @@ async def _start_agent(
     agent_type: str,
     user: User,
 ) -> AnalysisStartResponse:
+    reason = stage_block_reason(db, case, agent_type)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
     run, created = queue_investigation(db, case.id, agent_type, user.id)
     if agent_type == "traceability":
         case.status = "under_review"
@@ -307,27 +409,6 @@ async def start_analysis(
     db: Session = Depends(get_db),
 ):
     case = _get_authorized_case(db, user, case_id)
-    retailer_forwarded = db.scalar(
-        select(RetailerReview.id).where(
-            RetailerReview.case_id == case.id,
-            RetailerReview.decision == "forwarded",
-        )
-    )
-    approved_triage = db.scalar(
-        select(Proposal.id)
-        .join(AgentRun, AgentRun.id == Proposal.agent_run_id)
-        .join(Approval, Approval.proposal_id == Proposal.id)
-        .where(
-            Proposal.case_id == case.id,
-            AgentRun.agent_type == "triage",
-            Approval.decision == "approved",
-        )
-    )
-    if not retailer_forwarded and not approved_triage:
-        raise HTTPException(
-            status_code=409,
-            detail="Retailer triage approval is required before traceability",
-        )
     return await _start_agent(db, case, "traceability", user)
 
 
@@ -340,23 +421,6 @@ async def start_escalation_analysis(
     db: Session = Depends(get_db),
 ):
     case = _get_authorized_case(db, user, case_id)
-    approved_trace = db.scalar(
-        select(Proposal.id).where(
-            Proposal.case_id == case.id,
-            Proposal.type == "retailer_inspections",
-            Proposal.status == "approved",
-        )
-    )
-    if not approved_trace:
-        raise HTTPException(status_code=409, detail="An approved batch proposal is required")
-    completed_finding = db.scalar(
-        select(Inspection.id).where(
-            Inspection.case_id == case.id,
-            Inspection.status == "completed",
-        )
-    )
-    if not completed_finding:
-        raise HTTPException(status_code=409, detail="At least one retailer finding is required")
     return await _start_agent(db, case, "escalation", user)
 
 
@@ -395,7 +459,15 @@ async def decide_proposal(
         raise HTTPException(status_code=404, detail="Proposal not found")
     existing = db.scalar(select(Approval).where(Approval.proposal_id == proposal.id))
     if existing:
+        if existing.decision != payload.decision:
+            raise HTTPException(
+                status_code=409,
+                detail="This decision is already recorded. Rerun the agent for a new proposal.",
+            )
         return {"approval_id": existing.id, "decision": existing.decision, "idempotent": True}
+    reason = proposal_block_reason(db, case, proposal)
+    if reason:
+        raise HTTPException(status_code=409, detail=reason)
 
     approval = Approval(
         proposal_id=proposal.id,
@@ -428,14 +500,40 @@ async def decide_proposal(
     elif payload.decision == "approved" and proposal.type == "triage_recommendation":
         recommendation = proposal.payload["recommendation"]
         case.status = (
-            "waiting_for_information"
-            if recommendation == "request_information"
-            else "under_review"
+            "waiting_for_information" if recommendation == "request_information" else "under_review"
         )
+    elif payload.decision == "approved" and proposal.type == "retailer_followup":
+        targets = set(proposal.payload.get("followup_retailer_ids", []))
+        checks = db.scalars(select(Inspection).where(Inspection.case_id == case.id)).all()
+        if not targets or not targets <= {row.retailer_id for row in checks}:
+            raise HTTPException(
+                status_code=409, detail="Follow-up targets must be assigned supermarkets"
+            )
+        for check in checks:
+            if check.retailer_id in targets:
+                add_audit(
+                    db,
+                    case.id,
+                    "retailer_check_reopened",
+                    user.id,
+                    {
+                        "inspection_id": check.id,
+                        "previous_finding": check.finding,
+                        "previous_notes": check.notes,
+                    },
+                )
+                check.status = "pending"
+                check.finding = None
+                check.notes = None
+                check.completed_at = None
+                check.reviewed_by_user_id = None
+        case.status = "retailer_checks"
     elif payload.decision == "approved" and proposal.type == "manufacturer_escalation_packet":
-        existing_escalation = db.scalar(
-            select(Escalation).where(Escalation.case_id == case.id)
-        )
+        existing_escalation = db.scalar(select(Escalation).where(Escalation.case_id == case.id))
+        if existing_escalation:
+            raise HTTPException(
+                status_code=409, detail="A manufacturer packet was already sent for this case"
+            )
         if not existing_escalation:
             packet = dict(proposal.payload["manufacturer_packet"])
             if payload.notes:
@@ -469,7 +567,6 @@ async def decide_proposal(
         user.id,
         {"proposal_id": proposal.id, "decision": payload.decision, "notes": payload.notes},
     )
-    db.commit()
     run = db.get(AgentRun, proposal.agent_run_id)
     run.status = "completed"
     db.commit()

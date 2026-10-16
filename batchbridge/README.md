@@ -25,6 +25,12 @@ Open `http://localhost:8000/docs`. Demo data is seeded by default. Accounts use 
 - `retailer-c@batchbridge.demo`
 - `manufacturer@batchbridge.demo`
 
+Set `GROQ_API_KEY` in the ignored `.env`, with `AGENT_MODE=llm` (the default). Each agent uses Groq
+to select and call read-only MCP tools, inspect results, and submit a validated proposal for human
+review. Restart the backend after changing environment variables. Never put keys in `.env.example`.
+`AGENT_MODE=demo` explicitly selects the older rule-based simulation for offline tests. An LLM-mode
+failure is displayed as a failed run; it never silently switches to demo logic.
+
 ## Frontend quick start
 
 ```bash
@@ -58,8 +64,10 @@ The container listens on `0.0.0.0:$PORT`. All durable state is stored in Postgre
   evidence, and complete assigned checks.
 - Triage, traceability, and escalation agents share one read-only MCP evidence server with explicit
   per-agent tool permissions.
-- Groq adds a bounded risk summary and follow-up questions when configured. The database remains the
-  source of truth if Groq is unavailable.
+- Groq chooses investigation tool calls and recommendations. Canonical shipment recipients,
+  quantities, product and lot IDs are hydrated from MCP responses and validated before review.
+- Agent cards show execution mode, model, model-turn count, evidence summaries, questions, and MCP
+  calls. Earlier saved runs are labeled as previous demo runs; rerun them to obtain a Groq proposal.
 - Importer approval creates retailer tasks; no tool or model can create them before that approval.
 - Manufacturer escalation requires an approved traceability proposal, at least one human retailer
   finding, an escalation-agent packet, and a second importer approval.

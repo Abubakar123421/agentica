@@ -6,12 +6,15 @@ from langgraph.types import Command
 from sqlalchemy import func, select
 
 from app.audit import add_audit
+from app.config import get_settings
 from app.database import SessionLocal
-from app.models import AgentRun, Approval, Proposal, RetailerReview
+from app.models import AgentRun, Case, Proposal
+from app.services.case_workflow import input_snapshot
 from app.services.workflow import investigation_graph
 
 
 def queue_investigation(db, case_id: str, agent_type: str, created_by_user_id: str | None):
+    snapshot = input_snapshot(db, db.get(Case, case_id), agent_type)
     active = db.scalar(
         select(AgentRun).where(
             AgentRun.case_id == case_id,
@@ -19,6 +22,29 @@ def queue_investigation(db, case_id: str, agent_type: str, created_by_user_id: s
             AgentRun.status.in_(["queued", "running", "awaiting_human"]),
         )
     )
+    if (
+        active
+        and active.status == "awaiting_human"
+        and (
+            active.input_snapshot != snapshot
+            or (
+                get_settings().agent_mode == "llm"
+                and (active.result or {}).get("execution_mode") != "llm"
+            )
+        )
+    ):
+        old_proposal = db.scalar(select(Proposal).where(Proposal.agent_run_id == active.id))
+        if old_proposal:
+            old_proposal.status = "superseded"
+        active.status = "superseded"
+        add_audit(
+            db,
+            case_id,
+            "agent_run_superseded",
+            created_by_user_id,
+            {"run_id": active.id, "reason": "Inputs or execution mode changed"},
+        )
+        active = None
     if active:
         return active, False
     run = AgentRun(
@@ -27,6 +53,7 @@ def queue_investigation(db, case_id: str, agent_type: str, created_by_user_id: s
         thread_id=f"case:{case_id}:{agent_type}:{secrets.token_hex(6)}",
         status="queued",
         created_by_user_id=created_by_user_id,
+        input_snapshot=snapshot,
     )
     db.add(run)
     db.flush()
@@ -57,7 +84,7 @@ async def execute_investigation(run_id: str) -> None:
             investigation_graph.ainvoke(
                 {"case_id": case_id, "agent_type": agent_type}, config=config
             ),
-            timeout=90,
+            timeout=180,
         )
         proposal_payload = state["proposal"]
         with SessionLocal() as db:
@@ -77,24 +104,6 @@ async def execute_investigation(run_id: str) -> None:
             db.add(proposal)
             db.flush()
             run.status = "awaiting_human"
-            if agent_type == "triage":
-                review = db.scalar(
-                    select(RetailerReview)
-                    .where(RetailerReview.case_id == case_id)
-                    .order_by(RetailerReview.created_at.desc())
-                )
-                if review:
-                    decision = "approved" if review.decision == "forwarded" else "changes_requested"
-                    proposal.status = decision
-                    run.status = "completed"
-                    db.add(
-                        Approval(
-                            proposal_id=proposal.id,
-                            reviewer_id=review.reviewer_id,
-                            decision=decision,
-                            notes=review.notes,
-                        )
-                    )
             run.result = proposal_payload
             run.completed_at = datetime.now(timezone.utc)
             add_audit(
@@ -116,7 +125,10 @@ async def execute_investigation(run_id: str) -> None:
             run = db.get(AgentRun, run_id)
             if run:
                 run.status = "failed"
-                run.error = str(exc)[:2000]
+                cause = exc
+                while isinstance(cause, BaseExceptionGroup) and cause.exceptions:
+                    cause = cause.exceptions[0]
+                run.error = (str(cause) or type(cause).__name__)[:2000]
                 run.completed_at = datetime.now(timezone.utc)
                 add_audit(
                     db,

@@ -49,7 +49,10 @@ class TraceabilityResult(BaseModel):
 
 
 class EscalationResult(BaseModel):
-    type: Literal["manufacturer_escalation_packet"] = "manufacturer_escalation_packet"
+    type: Literal["manufacturer_escalation_packet", "retailer_followup", "monitoring"] = (
+        "manufacturer_escalation_packet"
+    )
+    followup_retailer_ids: list[str] = Field(default_factory=list)
     case_id: str
     batch_id: str
     completed_inspections: int

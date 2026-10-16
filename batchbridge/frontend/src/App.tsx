@@ -1,10 +1,12 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "./api";
+import { createDemoPhoto } from "./demoPhoto";
 import type {
   AgentRun,
   CaseDetail,
   CaseSummary,
+  DemoBarcodeMatch,
   Escalation,
   Inspection,
   Proposal,
@@ -57,9 +59,7 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
   const [form, setForm] = useState({
     reporter_name: "",
     reporter_email: "",
-    retailer_code: "RETAILER-A",
-    product_name: "SweetCo Alpine Milk Chocolate 100g",
-    batch_number: "38",
+    retailer_code: "",
     purchase_date: "",
     description: "",
   });
@@ -68,14 +68,49 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
   const [tracked, setTracked] = useState<Awaited<ReturnType<typeof api.track>> | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [retailers, setRetailers] = useState<{ code: string; name: string }[]>([]);
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [previews, setPreviews] = useState<string[]>([]);
+
+  useEffect(() => {
+    void api.retailers().then(setRetailers).catch(() => setError("Unable to load supermarkets. Please refresh."));
+  }, []);
+  useEffect(() => {
+    const urls = photos.map((file) => URL.createObjectURL(file));
+    setPreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [photos]);
+
+  function selectPhotos(files: File[]) {
+    setError("");
+    if (files.length > 3 || files.some((file) => !["image/jpeg", "image/png"].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      setError("Choose up to three JPEG or PNG photos, each no larger than 5 MB.");
+      return;
+    }
+    setPhotos(files);
+  }
+
+  async function useDemoPhoto() {
+    setBusy(true); setError("");
+    try {
+      setPhotos([await createDemoPhoto()]);
+      setForm((current) => ({ ...current, retailer_code: "RETAILER-A", description: current.description || "The sealed chocolate had an unusual smell and visible discoloration." }));
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to create demo photo"); }
+    finally { setBusy(false); }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     setBusy(true);
     setError("");
     try {
-      const payload = Object.fromEntries(Object.entries(form).filter(([, value]) => value));
-      setCreated(await api.report(payload));
+      if (!photos.length) throw new Error("Add a product photo or use the demo photo below.");
+      const payload = new FormData();
+      for (const [key, value] of Object.entries(form)) if (value) payload.append(key, value);
+      for (const photo of photos) payload.append("files", photo);
+      const result = await api.photoReport(payload);
+      setCreated(result);
+      setTrackingToken(result.tracking_token);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Unable to submit report");
     } finally {
@@ -106,13 +141,13 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
       <section className="hero-grid">
         <div className="hero-copy">
           <span className="eyebrow">Human-approved food safety investigations</span>
-          <h1>Trace one complaint across an entire supply chain.</h1>
+          <h1>Something wrong with your food? Start here.</h1>
           <p>
-            Report a suspected product issue. BatchBridge helps the importer connect the exact lot
-            to recorded retailers while people control every safety decision.
+            Share a photo and tell us what happened. Your supermarket’s food safety officer will
+            check the product details and forward the verified complaint for investigation.
           </p>
           <div className="trust-row">
-            <span>01 · Report</span><span>02 · Verify</span><span>03 · Coordinate</span>
+            <span>01 · Share a photo</span><span>02 · Officer verifies</span><span>03 · We investigate</span>
           </div>
           <form className="tracking-box" onSubmit={track}>
             <div><strong>Already submitted?</strong><span>Use your private token to check progress.</span></div>
@@ -124,16 +159,24 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
           <div>
             <span className="eyebrow">Public report</span>
             <h2>Tell us what happened</h2>
-            <p className="muted">A report starts an investigation. It does not confirm contamination.</p>
+            <p className="muted">No product codes needed. Your supermarket officer will verify the product and batch.</p>
           </div>
           <div className="form-grid two">
             <label>Name<input value={form.reporter_name} onChange={(event) => setForm({ ...form, reporter_name: event.target.value })} /></label>
             <label>Email<input type="email" value={form.reporter_email} onChange={(event) => setForm({ ...form, reporter_email: event.target.value })} /></label>
           </div>
-          <label>Product<input required minLength={2} value={form.product_name} onChange={(event) => setForm({ ...form, product_name: event.target.value })} /></label>
-          <div className="form-grid two">
-            <label>Retailer code<input value={form.retailer_code} onChange={(event) => setForm({ ...form, retailer_code: event.target.value })} /></label>
-            <label>Batch or lot<input value={form.batch_number} onChange={(event) => setForm({ ...form, batch_number: event.target.value })} /></label>
+          <label>Where did you buy it?<select required disabled={busy || Boolean(created)} value={form.retailer_code} onChange={(event) => setForm({ ...form, retailer_code: event.target.value })}>
+            <option value="">Choose your supermarket</option>
+            {retailers.map((retailer) => <option key={retailer.code} value={retailer.code}>{retailer.name}</option>)}
+          </select></label>
+          <div className="photo-upload">
+            <span className="eyebrow">Product photos</span>
+            <strong>Show us the packaging and the problem</strong>
+            <p className="muted small" id="photo-help">Include a clear photo of the barcode or printed code. Up to 3 JPEG/PNG photos, 5 MB each.</p>
+            <input aria-label="Product photos" aria-describedby="photo-help" type="file" accept="image/jpeg,image/png" multiple disabled={busy || Boolean(created)} onChange={(event) => selectPhotos(Array.from(event.target.files ?? []))} />
+            <div className="photo-preview-grid">{photos.map((photo, index) => <figure key={`${photo.name}-${index}`}><img src={previews[index]} alt={`Selected product photo ${index + 1}`} /><figcaption>{photo.name}</figcaption></figure>)}</div>
+            <button type="button" className="button button-secondary" disabled={busy || Boolean(created)} onClick={() => void useDemoPhoto()}>Try with a demo photo</button>
+            <span className="muted small">Fictional chocolate packaging for trying the full workflow.</span>
           </div>
           <label>Purchase date<input type="date" value={form.purchase_date} onChange={(event) => setForm({ ...form, purchase_date: event.target.value })} /></label>
           <label>What did you observe?<textarea required minLength={10} rows={4} value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
@@ -141,10 +184,12 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
           {created && (
             <div className="alert success">
               <strong>Report {created.case_id} created.</strong>
+              <span>Your supermarket officer will review the photos and verify the product.</span>
               <span>Save this private tracking token: <code>{created.tracking_token}</code></span>
+              <button type="button" className="button button-secondary" onClick={() => { setCreated(null); setPhotos([]); setForm((current) => ({ ...current, description: "" })); }}>Report another issue</button>
             </div>
           )}
-          <button className="button button-primary" disabled={busy}>{busy ? "Submitting…" : "Submit suspected issue"}</button>
+          <button className="button button-primary" disabled={busy || Boolean(created)}>{busy ? "Preparing report…" : created ? "Report received" : "Send to supermarket officer"}</button>
         </form>
       </section>
     </main>
@@ -189,6 +234,7 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
 function AgentCard({ agent, run }: { agent: keyof typeof agentMeta; run?: AgentRun }) {
   const meta = agentMeta[agent];
   const result = run?.result;
+  const assessment = result?.ai_assessment as { summary?: string; unanswered_questions?: string[] } | undefined;
   const toolCalls = asArray(result?.tool_calls);
   const confidence = typeof result?.confidence === "string" ? result.confidence : null;
   const recommendation =
@@ -202,6 +248,9 @@ function AgentCard({ agent, run }: { agent: keyof typeof agentMeta; run?: AgentR
       </div>
       {run ? (
         <div className="agent-body">
+          {result && <span className="pill pill-neutral">{result.execution_mode === "llm" ? `Groq · ${String(result.model)} · ${String(result.llm_turns)} model turns` : "Previous demo rules run"}</span>}
+          {assessment?.summary && <p className="muted small">{assessment.summary}</p>}
+          {assessment?.unanswered_questions && assessment.unanswered_questions.length > 0 && <div className="small"><strong>Follow-up questions</strong><ul>{assessment.unanswered_questions.map((question, index) => <li key={index}>{question}</li>)}</ul></div>}
           <div className="metric-row">
             {confidence && <span><small>Confidence</small><strong>{label(confidence)}</strong></span>}
             {recommendation && <span><small>Recommendation</small><strong>{label(recommendation)}</strong></span>}
@@ -243,7 +292,10 @@ function ProposalReview({ proposal, caseId, onDone }: { proposal: Proposal; case
   return (
     <section className="panel approval-panel">
       <div className="section-heading"><div><span className="eyebrow">Human checkpoint</span><h2>{label(proposal.type)}</h2></div><Pill value={proposal.status} /></div>
-      <p className="muted">Review the exact action and evidence before anything is sent or assigned.</p>
+      <p className="muted">Review proposal version {proposal.version} before anything is sent or assigned.</p>
+      {proposal.review_block_reason && <div className="alert">{proposal.review_block_reason}</div>}
+      {proposal.payload.recommendation != null && <p><strong>Recommendation:</strong> {label(String(proposal.payload.recommendation))}</p>}
+      {asArray(proposal.payload.rationale).map((reason, index) => <p key={index}>{String(reason)}</p>)}
       {retailers.length > 0 && (
         <div className="recipient-grid">
           {retailers.map((retailer) => (
@@ -260,26 +312,70 @@ function ProposalReview({ proposal, caseId, onDone }: { proposal: Proposal; case
       <label>Reviewer notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Record the reason for your decision" /></label>
       {error && <div className="alert danger">{error}</div>}
       <div className="action-row">
-        <button className="button button-primary" disabled={busy} onClick={() => void decide("approved")}>Approve action</button>
-        <button className="button button-danger" disabled={busy} onClick={() => void decide("rejected")}>Reject</button>
+        <button className="button button-primary" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("approved")}>Approve action</button>
+        <button className="button button-danger" disabled={busy || Boolean(proposal.review_block_reason)} onClick={() => void decide("rejected")}>Reject</button>
       </div>
     </section>
   );
 }
 
+function CaseInformation({ detail, onDone }: { detail: CaseDetail; onDone: () => Promise<void> }) {
+  const [notes, setNotes] = useState("");
+  const [product, setProduct] = useState("");
+  const [batch, setBatch] = useState("");
+  const [verdict, setVerdict] = useState("unconfirmed");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function save(close: boolean) {
+    setBusy(true); setError("");
+    try {
+      if (close) await api.closeCase(detail.case.id, notes, verdict);
+      else await api.addInformation(detail.case.id, notes, product, batch);
+      setNotes(""); await onDone();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save"); }
+    finally { setBusy(false); }
+  }
+  return <section className="panel"><details><summary>Add investigation information or close the case</summary>
+    <p className="muted">Saving information requires a new triage run and approval. Identity corrections are allowed before supermarket checks are assigned.</p>
+    <label>Additional facts / decision notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+    {detail.inspections.length === 0 && <><label>Corrected product (optional)<input value={product} onChange={(event) => setProduct(event.target.value)} /></label><label>Corrected lot (optional)<input value={batch} onChange={(event) => setBatch(event.target.value)} /></label></>}
+    <button className="button button-secondary" disabled={busy || notes.trim().length < 3} onClick={() => void save(false)}>Save information</button>
+    {detail.manufacturer_response && <><label>Final human verdict<select value={verdict} onChange={(event) => setVerdict(event.target.value)}>{["unconfirmed", "suspected", "confirmed", "not_supported"].map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></label><button className="button button-primary" disabled={busy || notes.trim().length < 3} onClick={() => void save(true)}>Record verdict and close</button></>}
+    {error && <div className="alert danger">{error}</div>}
+  </details></section>;
+}
+
 function RetailerActions({ detail, inspections, onDone }: { detail: CaseDetail; inspections: Inspection[]; onDone: () => Promise<void> }) {
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [barcode, setBarcode] = useState("");
+  const [match, setMatch] = useState<DemoBarcodeMatch | null>(null);
+  const [confirmed, setConfirmed] = useState(false);
   const inspection = inspections.find((item) => item.case_id === detail.case.id);
+  const needsVerification = detail.case.source === "customer_photo";
+
+  async function lookup() {
+    setBusy(true); setError(""); setMatch(null); setConfirmed(false);
+    try { setMatch(await api.lookupBarcode(detail.case.id, barcode)); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Barcode lookup failed"); }
+    finally { setBusy(false); }
+  }
 
   async function review(decision: string) {
-    setBusy(true);
-    try { await api.reviewCase(detail.case.id, decision, notes || "Reviewed by retailer safety manager."); await onDone(); } finally { setBusy(false); }
+    setBusy(true); setError("");
+    try {
+      await api.reviewCase(detail.case.id, decision, notes || "Packaging reviewed by supermarket officer.", match?.barcode);
+      await onDone();
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to forward case"); }
+    finally { setBusy(false); }
   }
   async function finding(value: string) {
     if (!inspection) return;
-    setBusy(true);
-    try { await api.submitFinding(inspection.id, value, notes || "Stock inspected by retailer safety manager."); await onDone(); } finally { setBusy(false); }
+    setBusy(true); setError("");
+    try { await api.submitFinding(inspection.id, value, notes || "Stock inspected by retailer safety manager."); await onDone(); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to record finding"); }
+    finally { setBusy(false); }
   }
 
   if (inspection && inspection.status !== "completed") {
@@ -287,6 +383,7 @@ function RetailerActions({ detail, inspections, onDone }: { detail: CaseDetail; 
       <section className="panel approval-panel">
         <span className="eyebrow">Assigned inspection</span><h2>Record the human finding</h2>
         <label>Inspection notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+        {error && <div className="alert danger" role="alert">{error}</div>}
         <div className="action-row">
           <button className="button button-danger" disabled={busy} onClick={() => void finding("issue_observed")}>Issue observed</button>
           <button className="button button-secondary" disabled={busy} onClick={() => void finding("no_issue_observed")}>No issue observed</button>
@@ -295,13 +392,28 @@ function RetailerActions({ detail, inspections, onDone }: { detail: CaseDetail; 
       </section>
     );
   }
-  if (detail.case.status === "new_report") {
+  if (!inspection && detail.retailer_review?.decision !== "forwarded") {
     return (
       <section className="panel approval-panel">
-        <span className="eyebrow">Retailer checkpoint</span><h2>Review customer complaint</h2>
+        <span className="eyebrow">Supermarket food safety officer</span><h2>Verify, then forward</h2>
+        {needsVerification && <div className="verification-box">
+          <div className="section-heading"><strong>Identify the product from the photo</strong><span className="pill pill-warning">Simulated barcode lookup</span></div>
+          <p className="muted small">Review the uploaded packaging, then enter its demo code. This demo uses a fixed product and batch mapping; it does not decode images.</p>
+          <label>Demo barcode<input value={barcode} placeholder="e.g. DEMO-CHOC-38" onChange={(event) => { setBarcode(event.target.value); setMatch(null); setConfirmed(false); }} /></label>
+          <div className="action-row">
+            <button className="button button-secondary" disabled={busy || !barcode.trim()} onClick={() => void lookup()}>{busy ? "Checking…" : "Look up demo barcode"}</button>
+            <button className="button button-ghost" disabled={busy} onClick={() => { setBarcode("DEMO-CHOC-38"); setMatch(null); setConfirmed(false); }}>Use demo code</button>
+          </div>
+          {match && <div className="verified-match" role="status">
+            <span className="eyebrow">Match from demo records</span><h3>{match.product_name}</h3>
+            <div className="metric-row"><span><small>Product</small><strong>{match.sku}</strong></span><span><small>Manufacturer lot</small><strong>{match.batch_number}</strong></span></div>
+            <label className="confirmation"><input type="checkbox" checked={confirmed} onChange={(event) => setConfirmed(event.target.checked)} />I reviewed the photos and confirm this demo product and batch match.</label>
+          </div>}
+        </div>}
         <label>Review notes<textarea rows={3} value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+        {error && <div className="alert danger" role="alert">{error}</div>}
         <div className="action-row">
-          <button className="button button-primary" disabled={busy} onClick={() => void review("forwarded")}>Forward to importer</button>
+          <button className="button button-primary" disabled={busy || (needsVerification && (!match || !confirmed))} onClick={() => void review("forwarded")}>Verify & forward to importer</button>
           <button className="button button-secondary" disabled={busy} onClick={() => void review("needs_customer_information")}>Request information</button>
         </div>
       </section>
@@ -351,6 +463,12 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
 
   useEffect(() => { void refresh().catch((reason) => setError(String(reason))); }, [refresh]);
 
+  useEffect(() => {
+    if (!detail?.agent_runs.some((run) => ["queued", "running"].includes(run.status))) return;
+    const timer = window.setTimeout(() => { void refresh().catch((reason) => setError(String(reason))); }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [detail, refresh]);
+
   const latestRuns = useMemo(() => {
     const result: Partial<Record<AgentRun["agent_type"], AgentRun>> = {};
     for (const run of detail?.agent_runs ?? []) result[run.agent_type] = run;
@@ -360,26 +478,15 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
   async function start(agent: AgentRun["agent_type"]) {
     setBusy(agent); setError("");
     try {
-      const started = await api.startAgent(summary.id, agent);
-      for (let attempt = 0; attempt < 20; attempt += 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 350));
-        const next = await api.caseDetail(summary.id);
-        setDetail(next);
-        const run = next.agent_runs.find((item) => item.id === started.run_id);
-        if (run && ["awaiting_human", "completed", "failed"].includes(run.status)) break;
-      }
+      await api.startAgent(summary.id, agent);
+      await refresh();
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Agent failed"); }
     finally { setBusy(""); }
   }
 
   if (!detail) return <div className="empty-state">Loading case evidence…</div>;
-  const pending = detail.proposals.find((proposal) => proposal.status === "pending");
-  const traceabilityApproved = detail.proposals.some(
-    (proposal) =>
-      ["triage_recommendation", "retailer_inspections"].includes(proposal.type) &&
-      proposal.status === "approved",
-  );
-  const hasCompletedFinding = detail.inspections.some((item) => item.status === "completed");
+  const pending = detail.proposals.filter((proposal) => proposal.status === "pending" && Object.values(detail.workflow).some((step) => step.latest_proposal_id === proposal.id));
+  const agentRunning = Boolean(busy) || detail.agent_runs.some((run) => ["queued", "running"].includes(run.status));
 
   return (
     <div className="workspace">
@@ -389,6 +496,20 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
       </header>
       {error && <div className="alert danger">{error}</div>}
       {user.role === "importer_investigator" && <ImportPanel />}
+      {detail.demo_verification && <section className="panel verified-match">
+        <span className="eyebrow">Human-verified product identity</span><h2>{detail.demo_verification.product_name}</h2>
+        <p>Product {detail.demo_verification.sku} · Lot {detail.demo_verification.batch_number}</p>
+        <span className="muted small">Confirmed by the supermarket officer using simulated code {detail.demo_verification.barcode}. See the timeline for the review record.</span>
+      </section>}
+      {detail.evidence.length > 0 && <section className="panel">
+        <div className="section-heading"><div><span className="eyebrow">Customer evidence</span><h2>Packaging & reported issue</h2></div><span className="muted small">{detail.evidence.length} attachment(s)</span></div>
+        <div className="evidence-grid">{detail.evidence.map((item) => <a key={item.id} href={item.url} target="_blank" rel="noreferrer" className="evidence-card">
+          {item.content_type.startsWith("image/") ? <img src={item.url} alt={`Submitted evidence: ${item.filename}`} /> : <span>PDF evidence</span>}
+          <span>{item.filename} ↗</span>
+        </a>)}</div>
+      </section>}
+      {detail.case.source === "customer_photo" && detail.retailer_review?.decision !== "forwarded" && user.role === "importer_investigator" && <div className="alert" role="status">Awaiting supermarket officer verification. Product identification and tracing become available after the officer forwards the case.</div>}
+      {user.role === "retailer_safety_manager" && <RetailerActions key={detail.case.id} detail={detail} inspections={inspections} onDone={refresh} />}
       <section>
         <div className="section-heading"><div><span className="eyebrow">Agent workflow</span><h2>Evidence before action</h2></div><button className="button button-ghost" onClick={() => void refresh()}>Refresh</button></div>
         <div className="agent-grid">
@@ -398,13 +519,20 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
         </div>
         {user.role === "importer_investigator" && (
           <div className="action-row top-gap">
-            <button className="button button-secondary" disabled={Boolean(busy) || !traceabilityApproved} title={!traceabilityApproved ? "Requires retailer triage approval" : undefined} onClick={() => void start("traceability")}>{busy === "traceability" ? "Tracing…" : "Run Traceability Agent"}</button>
-            <button className="button button-primary" disabled={Boolean(busy) || !traceabilityApproved || !hasCompletedFinding} title={!hasCompletedFinding ? "Requires a completed retailer finding" : undefined} onClick={() => void start("escalation")}>{busy === "escalation" ? "Preparing…" : "Run Escalation Agent"}</button>
+            <button className="button button-secondary" disabled={agentRunning || !detail.workflow.triage.can_run} title={detail.workflow.triage.blocked_reason ?? undefined} onClick={() => void start("triage")}>Run Triage Agent</button>
+            <button className="button button-secondary" disabled={agentRunning || !detail.workflow.traceability.can_run} title={detail.workflow.traceability.blocked_reason ?? undefined} onClick={() => void start("traceability")}>Run Traceability Agent</button>
+            <button className="button button-primary" disabled={agentRunning || !detail.workflow.escalation.can_run} title={detail.workflow.escalation.blocked_reason ?? undefined} onClick={() => void start("escalation")}>Run Escalation Agent</button>
           </div>
         )}
       </section>
-      {pending && user.role === "importer_investigator" && <ProposalReview proposal={pending} caseId={detail.case.id} onDone={refresh} />}
-      {user.role === "retailer_safety_manager" && <RetailerActions detail={detail} inspections={inspections} onDone={refresh} />}
+      {agentRunning && <div className="alert" role="status">Agent investigation is running. This page refreshes automatically until it finishes or needs human review.</div>}
+      {user.role === "importer_investigator" && <>
+        {Object.entries(detail.workflow).map(([stage, step]) => step.blocked_reason && <p className="muted" key={stage}><strong>{label(stage)}:</strong> {step.blocked_reason}</p>)}
+        {pending.map((proposal) => <ProposalReview key={proposal.id} proposal={proposal} caseId={detail.case.id} onDone={refresh} />)}
+        {detail.case.status !== "closed" && <CaseInformation key={detail.case.id} detail={detail} onDone={refresh} />}
+      </>}
+      {detail.inspections.length > 0 && <section className="panel"><span className="eyebrow">Supermarket checks</span><h2>{detail.inspections.filter((item) => item.status === "completed").length} / {detail.inspections.length} responses received</h2>{detail.inspections.map((item) => <p key={item.id}><strong>{item.retailer_name}</strong> · {label(item.status)}{item.finding && ` · ${label(item.finding)}`}<br />{item.notes}</p>)}</section>}
+      {detail.manufacturer_response && <section className="panel"><h2>Manufacturer response</h2><p>{detail.manufacturer_response}</p></section>}
       <section className="panel">
         <div className="section-heading"><div><span className="eyebrow">Audit trail</span><h2>Case timeline</h2></div><span className="muted">{detail.timeline.length} events</span></div>
         <div className="timeline">

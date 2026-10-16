@@ -16,7 +16,9 @@ flowchart LR
     TR --> MCP
     E --> MCP
     MCP --> DB
-    LG -. optional summary .-> G[Groq API]
+    T --> G[Groq API]
+    TR --> G
+    E --> G
 ```
 
 The importer owns the application and source data. FastAPI is the authorization and mutation
@@ -66,14 +68,16 @@ sequenceDiagram
 
     U->>A: Submit suspected issue
     A->>D: Store case and audit event
+    R->>A: Review photo and preview simulated barcode match
+    A->>D: Check product/lot and supermarket shipment
+    R->>A: Confirm identity and forward photo case
+    A->>D: Save verified identity and officer audit event
     A->>T: Queue triage run
     T->>Q: Read case, product candidates, related reports
     Q->>D: Query approved operational records
     D-->>Q: Structured evidence
     Q-->>T: Evidence and tool trace
     T-->>D: Save triage proposal and run
-    R->>A: Review/forward (if retailer-originated review)
-    H->>A: Approve triage when required
     A->>X: Queue traceability after gate
     X->>Q: Read batch and distribution records
     Q->>D: Query exact product/lot shipment data
@@ -90,10 +94,12 @@ sequenceDiagram
     A->>D: Create escalation and audit event
 ```
 
-The diagram shows the usual path. A customer report is visible to the importer immediately, and a
-retailer-forwarded report can satisfy the triage gate. The application permits escalation analysis
-after at least one completed retailer finding; it does not require every recipient to finish before
-the importer can consider an urgent escalation.
+The diagram shows the photo-report path. The officer confirms a fictional barcode fixture, not a
+decoded image or a contamination diagnosis. Photo reports cannot proceed to importer traceability
+until this officer forwarding step. Legacy structured reports retain creation-time triage and can
+proceed after explicit approval of the latest triage proposal. A customer report is visible to the
+importer immediately. Escalation analysis requires completed findings from all assigned retailers.
+The importer reviews the model recommendation before follow-up checks, monitoring, or manufacturer dispatch.
 
 ## Core data relationships
 
@@ -112,7 +118,12 @@ response contract.
 ## Reliability behavior
 
 - Queued or interrupted agent runs are recovered on application startup.
-- Groq is optional; deterministic matching remains available without an API key.
+- In default LLM mode, each stage runs a bounded Groq tool-calling loop within its LangGraph node.
+  Tool schemas come from MCP discovery and are filtered by the stage's allowlist. Model decisions
+  are validated against a ledger of successful MCP responses before a proposal can reach review.
+- Model or validation failures never silently fall back. Offline simulation requires an explicit
+  `AGENT_MODE=demo`. Existing simulation proposals are preserved and labeled; a requested fresh LLM
+  run supersedes any unreviewed simulation proposal.
 - Approval and import requests support idempotent behavior where duplicate actions would be risky.
 - Health endpoints separate process liveness from database readiness.
 - PostgreSQL stores all durable production state; local SQLite exists for development and tests.
