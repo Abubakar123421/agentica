@@ -90,6 +90,11 @@ def finalize_trace(decision: TraceDecision, ledger: EvidenceLedger) -> dict:
         or batch["batch_number"] != case.get("batch_number")
     ):
         raise ValueError("Product and lot must match the retrieved batch and case")
+    if decision.proposal_type == "request_information" and not decision.missing:
+        raise ValueError(
+            "Information requests must identify a concrete missing traceability fact in missing. "
+            "Lab confirmation is not required for tracing or proposing retailer checks."
+        )
     shipments, excluded, related = [], [], []
     if decision.proposal_type == "retailer_inspections":
         if not product or not batch:
@@ -205,7 +210,16 @@ STAGES = {
         "only when supported. If product and lot are known, read related reports. Recommend "
         "requesting "
         "information, retailer review, or importer investigation. An officer-forwarded photo case "
-        "already has a verified identity; assess it for importer investigation.",
+        "already has a verified identity; assess it for importer investigation. "
+        "Assess intake readiness for tracing; batch safety is decided later. "
+        "Request information only for a concrete intake blocker: an unresolved product, unreadable "
+        "lot, unknown purchase supermarket, or a report too unclear to investigate. "
+        "Missing lab confirmation, storage records, inspection findings, receipts, "
+        "or related complaints do not by themselves block tracing an identified product and lot. "
+        "Record those as follow-up questions for the downstream investigation. When the officer "
+        "has forwarded a clearly described complaint with a resolved product, lot and supermarket, "
+        "recommend importer investigation unless a specific intake contradiction blocks it. "
+        "Explain any intake blocker precisely; do not ask generic questions as prerequisites.",
     ),
     "traceability": (
         TraceDecision,
@@ -215,7 +229,12 @@ STAGES = {
         "retailer checks, read shipments, excluded retailers and related reports for the exact "
         "product "
         "and lot. If unresolved, request information with useful questions. Explain match "
-        "uncertainty.",
+        "uncertainty. Your task is shipment tracing, not confirming contamination. "
+        "When product, lot and shipment recipients are resolved, propose retailer_inspections "
+        "so humans can investigate. Lab confirmation, recall status, storage history, and other "
+        "retailer findings are downstream questions, not prerequisites for retailer checks. "
+        "Use request_information only for a concrete missing or contradictory traceability fact "
+        "and name it in missing. No related reports is a valid empty result, not a blocker.",
     ),
     "escalation": (
         EscalationDecision,

@@ -1,6 +1,7 @@
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import agent_execution_mode
 from app.models import (
     AgentRun,
     Approval,
@@ -116,6 +117,13 @@ def stage_block_reason(db: Session, case: Case, stage: str) -> str | None:
         return None
     triage = approved_latest(db, case, "triage")
     if not triage:
+        triage_run, triage_proposal = latest_stage(db, case.id, "triage")
+        if triage_run and triage_proposal and triage_proposal.status == "approved":
+            if triage_run.input_snapshot != input_snapshot(db, case, "triage"):
+                return (
+                    "Case information changed after triage. Run Triage Agent again, "
+                    "approve its new proposal, then run Traceability Agent."
+                )
         return "Run triage and explicitly approve its latest proposal before traceability."
     if triage.payload.get("recommendation") == "request_information":
         return "Triage requested information. Add the missing details, rerun triage and review it."
@@ -152,6 +160,8 @@ def proposal_block_reason(db: Session, case: Case, proposal: Proposal) -> str | 
         return "A newer agent run exists. Review the latest proposal."
     if run.input_snapshot != input_snapshot(db, case, run.agent_type):
         return "This proposal uses older inputs or approvals. Rerun the agent before approving it."
+    if (run.result or {}).get("execution_mode") != agent_execution_mode(run.agent_type):
+        return "Execution mode changed. Rerun this stage to review its current proposal."
     if run.status != "awaiting_human" or proposal.status != "pending":
         return "This proposal is no longer awaiting review."
     reason = stage_block_reason(db, case, run.agent_type)

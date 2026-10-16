@@ -44,7 +44,11 @@
 - [x] Add structured results and per-agent MCP tool allowlists.
 - [x] Require a second importer approval for the escalation-agent evidence packet.
 - [x] Keep exact shipment matching deterministic and database-backed.
-- [x] Add bounded Groq tool-calling investigations for all three agents.
+- [x] Add bounded Groq tool-calling triage with evidence validation.
+- [x] Replace active traceability/escalation LLM calls with MCP-backed rule-based stages.
+- [x] Remove traceability/escalation API-key slots and label rule execution accurately.
+- [x] Add input snapshots, fresh approval gates, changed-input UI guidance, and quota errors.
+- [x] Verify no-model rule stages and manufacturer/follow-up/monitoring outcomes.
 - [x] Validate model decisions against MCP evidence; never accept invented shipment recipients.
 - [x] Label execution mode and require explicit demo mode for offline simulations.
 - [x] Store runs, proposals, confidence, evidence, and errors.
@@ -57,7 +61,8 @@
 - [x] Test the public-to-importer-to-retailer-to-manufacturer workflow.
 - [x] Test CSV imports and exact product-plus-lot matching.
 - [x] Prove that Retailer D is excluded from lot `38` results.
-- [x] Run Ruff and Pytest successfully.
+- [x] Run Ruff, 35 backend tests, and the frontend TypeScript/Vite build successfully.
+- [x] Verify live local MCP traceability and escalation without Groq requests.
 - [ ] Run a container smoke check on a machine with Docker available.
 
 ## Phase 6: responsive frontend
@@ -82,7 +87,8 @@
 - [ ] Create a PostgreSQL 17 template service with persistent storage.
 - [ ] Create a GitHub application service using `batchbridge` as the root directory.
 - [ ] Link PostgreSQL to the application with alias `DB`.
-- [ ] Set `APP_BASE_URL`, `SESSION_SECRET`, `GROQ_API_KEY`, `GROQ_MODEL`, `COOKIE_SECURE`,
+- [ ] Set `APP_BASE_URL`, `SESSION_SECRET`, triage `GROQ_TRIAGE_API_KEY` or `GROQ_API_KEY`,
+  `GROQ_MODEL`, `AGENT_MODE`, `COOKIE_SECURE`,
   `ALLOWED_ORIGINS`, `SEED_DEMO_DATA`, and `DEMO_PASSWORD`.
 - [ ] Follow the required order: set variables, rebuild, then deploy.
 - [ ] Verify liveness, readiness, login, migrations, the full demo, and persistence after redeploy.

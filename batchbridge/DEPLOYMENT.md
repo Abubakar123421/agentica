@@ -52,7 +52,7 @@ acc services link APP_SERVICE_ID DATABASE_SERVICE_ID --alias DB
 ```bash
 acc services env set APP_SERVICE_ID APP_BASE_URL https://APP-SLUG-app.alternatefutures.ai
 acc services env set APP_SERVICE_ID SESSION_SECRET A_LONG_RANDOM_VALUE
-acc services env set APP_SERVICE_ID GROQ_API_KEY YOUR_GROQ_KEY
+acc services env set APP_SERVICE_ID GROQ_TRIAGE_API_KEY YOUR_TRIAGE_GROQ_KEY
 acc services env set APP_SERVICE_ID GROQ_MODEL openai/gpt-oss-20b
 acc services env set APP_SERVICE_ID AGENT_MODE llm
 acc services env set APP_SERVICE_ID COOKIE_SECURE true
@@ -82,3 +82,14 @@ acc services logs APP_SERVICE_ID --tail 100
 For the hackathon, use synthetic data only. The template provides persistent PostgreSQL storage but
 does not by itself prove managed backups, high availability, or a production disaster recovery SLA.
 
+
+## Current hybrid configuration and verification status
+
+Only triage needs Groq: use `GROQ_TRIAGE_API_KEY` or fallback `GROQ_API_KEY`. Do not provision
+traceability/escalation keys; these stages always use rules and MCP. Never place actual keys
+in shell history or Git; prefer dashboard secret entry when configuring the live service.
+
+This document is a deployment checklist, not proof of deployment. The commands above have not
+been rerun against the current cloud CLI during this documentation update. Confirm the current
+platform instructions before executing them. Container smoke testing, live PostgreSQL persistence,
+and full Alternate Clouds deployment verification remain pending.

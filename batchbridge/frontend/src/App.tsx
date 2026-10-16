@@ -231,7 +231,7 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
   );
 }
 
-function AgentCard({ agent, run }: { agent: keyof typeof agentMeta; run?: AgentRun }) {
+function AgentCard({ agent, run, gate }: { agent: keyof typeof agentMeta; run?: AgentRun; gate: CaseDetail["workflow"][AgentRun["agent_type"]] }) {
   const meta = agentMeta[agent];
   const result = run?.result;
   const assessment = result?.ai_assessment as { summary?: string; unanswered_questions?: string[] } | undefined;
@@ -240,15 +240,15 @@ function AgentCard({ agent, run }: { agent: keyof typeof agentMeta; run?: AgentR
   const recommendation =
     typeof result?.recommendation === "string" ? result.recommendation : null;
   return (
-    <article className={`agent-card ${run ? "active" : "locked"}`}>
+    <article className={`agent-card ${run || gate.can_run ? "active" : "locked"}`}>
       <div className="agent-heading">
         <span className="agent-number">{meta.number}</span>
         <div><h3>{meta.title} Agent</h3><p>{meta.description}</p></div>
-        <Pill value={run?.status ?? "locked"} />
+        <Pill value={run?.status ?? (gate.can_run ? "ready" : "locked")} />
       </div>
       {run ? (
         <div className="agent-body">
-          {result && <span className="pill pill-neutral">{result.execution_mode === "llm" ? `Groq · ${String(result.model)} · ${String(result.llm_turns)} model turns` : "Previous demo rules run"}</span>}
+          {result && <span className="pill pill-neutral">{result.execution_mode === "llm" ? `Groq · ${String(result.model)} · ${String(result.llm_turns)} model turns` : result.execution_mode === "rules" ? "Rule-based · MCP records · No LLM" : "Previous demo rules run"}</span>}
           {assessment?.summary && <p className="muted small">{assessment.summary}</p>}
           {assessment?.unanswered_questions && assessment.unanswered_questions.length > 0 && <div className="small"><strong>Follow-up questions</strong><ul>{assessment.unanswered_questions.map((question, index) => <li key={index}>{question}</li>)}</ul></div>}
           <div className="metric-row">
@@ -263,9 +263,10 @@ function AgentCard({ agent, run }: { agent: keyof typeof agentMeta; run?: AgentR
               ))}
             </div>
           )}
+          {gate.blocked_reason && !["queued", "running"].includes(run.status) && <div className="alert" role="status">{gate.blocked_reason}</div>}
           {run.error && <div className="alert danger">{run.error}</div>}
         </div>
-      ) : <p className="locked-copy">Complete the previous human checkpoint to unlock this stage.</p>}
+      ) : <p className="locked-copy">{gate.blocked_reason ?? "Ready. Use the run button below to begin this stage."}</p>}
     </article>
   );
 }
@@ -337,9 +338,9 @@ function CaseInformation({ detail, onDone }: { detail: CaseDetail; onDone: () =>
   }
   return <section className="panel"><details><summary>Add investigation information or close the case</summary>
     <p className="muted">Saving information requires a new triage run and approval. Identity corrections are allowed before supermarket checks are assigned.</p>
-    <label>Additional facts / decision notes<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
+    <label>New investigation facts (changes require fresh triage)<textarea value={notes} onChange={(event) => setNotes(event.target.value)} /></label>
     {detail.inspections.length === 0 && <><label>Corrected product (optional)<input value={product} onChange={(event) => setProduct(event.target.value)} /></label><label>Corrected lot (optional)<input value={batch} onChange={(event) => setBatch(event.target.value)} /></label></>}
-    <button className="button button-secondary" disabled={busy || notes.trim().length < 3} onClick={() => void save(false)}>Save information</button>
+    <button className="button button-secondary" disabled={busy || notes.trim().length < 3} onClick={() => void save(false)}>Save facts — rerun triage required</button>
     {detail.manufacturer_response && <><label>Final human verdict<select value={verdict} onChange={(event) => setVerdict(event.target.value)}>{["unconfirmed", "suspected", "confirmed", "not_supported"].map((value) => <option key={value} value={value}>{label(value)}</option>)}</select></label><button className="button button-primary" disabled={busy || notes.trim().length < 3} onClick={() => void save(true)}>Record verdict and close</button></>}
     {error && <div className="alert danger">{error}</div>}
   </details></section>;
@@ -513,9 +514,9 @@ function CaseWorkspace({ user, summary }: { user: User; summary: CaseSummary }) 
       <section>
         <div className="section-heading"><div><span className="eyebrow">Agent workflow</span><h2>Evidence before action</h2></div><button className="button button-ghost" onClick={() => void refresh()}>Refresh</button></div>
         <div className="agent-grid">
-          <AgentCard agent="triage" run={latestRuns.triage} />
-          <AgentCard agent="traceability" run={latestRuns.traceability} />
-          <AgentCard agent="escalation" run={latestRuns.escalation} />
+          <AgentCard agent="triage" run={latestRuns.triage} gate={detail.workflow.triage} />
+          <AgentCard agent="traceability" run={latestRuns.traceability} gate={detail.workflow.traceability} />
+          <AgentCard agent="escalation" run={latestRuns.escalation} gate={detail.workflow.escalation} />
         </div>
         {user.role === "importer_investigator" && (
           <div className="action-row top-gap">

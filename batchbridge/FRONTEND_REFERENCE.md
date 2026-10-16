@@ -27,3 +27,14 @@ Use it as visual and information-architecture inspiration only. Do not copy its 
 5. Retailer inspection inbox and finding form.
 6. Manufacturer escalation inbox and response form.
 
+
+## Implemented workflow feedback
+
+- Stage run buttons use backend `workflow` gates and display concrete blocker reasons.
+- A stage without a run shows Ready when eligible, rather than always Locked.
+- Triage displays Groq/model/turn metadata; tracing/escalation display Rule-based / MCP / No LLM.
+- Saving facts explicitly states that fresh triage is required. A changed input snapshot is
+  distinguished from a missing human approval.
+- Importer detail shows named retailer response counts/findings, pending proposal actions,
+  manufacturer response, and final human closure controls.
+- Final browser keyboard/viewport verification remains pending.

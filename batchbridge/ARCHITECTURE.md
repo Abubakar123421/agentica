@@ -17,12 +17,10 @@ flowchart LR
     E --> MCP
     MCP --> DB
     T --> G[Groq API]
-    TR --> G
-    E --> G
 ```
 
 The importer owns the application and source data. FastAPI is the authorization and mutation
-boundary. LangGraph runs three bounded agents with human gates between stages. The shared MCP server
+boundary. LangGraph runs LLM triage and two rule-based stages with human gates between stages. The shared MCP server
 exposes read-only evidence tools with per-agent allowlists, and PostgreSQL remains the source of
 truth.
 
@@ -78,16 +76,17 @@ sequenceDiagram
     D-->>Q: Structured evidence
     Q-->>T: Evidence and tool trace
     T-->>D: Save triage proposal and run
-    A->>X: Queue traceability after gate
+    H->>A: Approve current triage proposal
+    A->>X: Queue rule-based traceability after gate
     X->>Q: Read batch and distribution records
     Q->>D: Query exact product/lot shipment data
     D-->>X: Batch recipients and quantities
     X-->>D: Save inspection proposal
     H->>A: Approve retailer checks
     A->>D: Create retailer tasks and audit event
-    R->>A: Submit human inspection finding
+    R->>A: Every assigned retailer submits a human inspection finding
     H->>A: Start escalation analysis
-    A->>E: Queue escalation run
+    A->>E: Queue rule-based escalation run
     E->>Q: Read approved trace, findings, evidence, timeline
     E-->>D: Save manufacturer packet proposal
     H->>A: Approve packet delivery
@@ -99,7 +98,7 @@ decoded image or a contamination diagnosis. Photo reports cannot proceed to impo
 until this officer forwarding step. Legacy structured reports retain creation-time triage and can
 proceed after explicit approval of the latest triage proposal. A customer report is visible to the
 importer immediately. Escalation analysis requires completed findings from all assigned retailers.
-The importer reviews the model recommendation before follow-up checks, monitoring, or manufacturer dispatch.
+The importer reviews the rule-based escalation recommendation before follow-up checks, monitoring, or manufacturer dispatch.
 
 ## Core data relationships
 
@@ -118,19 +117,31 @@ response contract.
 ## Reliability behavior
 
 - Queued or interrupted agent runs are recovered on application startup.
-- In default LLM mode, each stage runs a bounded Groq tool-calling loop within its LangGraph node.
+- In default LLM mode, triage runs a bounded Groq tool-calling loop within its LangGraph node.
   Tool schemas come from MCP discovery and are filtered by the stage's allowlist. Model decisions
   are validated against a ledger of successful MCP responses before a proposal can reach review.
-- Model or validation failures never silently fall back. Offline simulation requires an explicit
-  `AGENT_MODE=demo`. Existing simulation proposals are preserved and labeled; a requested fresh LLM
-  run supersedes any unreviewed simulation proposal.
+- Traceability and escalation execute fixed MCP lookups and data-driven rules without Groq.
+- Triage failures never silently fall back. Offline triage simulation requires explicit
+  `AGENT_MODE=demo`. Pending results from changed execution modes can be superseded; history remains.
 - Approval and import requests support idempotent behavior where duplicate actions would be risky.
 - Health endpoints separate process liveness from database readiness.
 - PostgreSQL stores all durable production state; local SQLite exists for development and tests.
 
 ## Deployment topology
 
-The GitHub repository is connected to an Alternate Clouds application service with
+The intended deployment connects the GitHub repository to an Alternate Clouds application service with
 `batchbridge` as its root directory. A PostgreSQL 17 template service is linked as `DB`, which
 provides `DATABASE_URL`. The container runs database migrations before starting Uvicorn and listens
 on `0.0.0.0:$PORT`.
+
+## Hybrid execution update (2026-10-17)
+
+Only triage uses Groq (`GROQ_TRIAGE_API_KEY`, falling back to `GROQ_API_KEY`).
+Traceability and escalation always use deterministic rules and read-only MCP records,
+regardless of AGENT_MODE; their dedicated API-key slots were removed. Traceability
+requires an exact SKU/name/known alias plus lot and recorded shipments. Escalation
+requires every assigned retailer finding; observed issues prepare a manufacturer
+packet, inconclusive findings without observed issues propose targeted follow-up,
+and otherwise propose monitoring. Every consequential action still requires human
+approval. These stages are labeled rule-based in the UI, not LLM-powered.
+Existing pending results from another execution mode can be rerun; history remains.

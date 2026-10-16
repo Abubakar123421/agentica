@@ -55,8 +55,9 @@ All seeded accounts use the deployed `DEMO_PASSWORD`.
 - A customer can report directly, but a report starts an investigation rather than proving
   contamination.
 - Shipment recipients come from importer records through MCP tools.
-- The model summarizes and recommends; it cannot dispatch tasks, contact the manufacturer, or mark a
-  batch contaminated.
+- Triage uses the model; traceability and escalation use MCP-backed rules. Neither model nor
+  rules can dispatch tasks, contact the manufacturer, or mark a batch contaminated without the
+  role-checked human action.
 - Each handoff shows the responsible human, timestamp, evidence, and decision.
 - The same workflow accepts a retailer-originated inspection report.
 
@@ -66,7 +67,7 @@ All seeded accounts use the deployed `DEMO_PASSWORD`.
 - [ ] PostgreSQL is linked and demo data is present.
 - [ ] Staff login works with `DEMO_PASSWORD`.
 - [ ] Groq key is configured in `.env` and `AGENT_MODE=llm`; restart after setting variables.
-- [ ] Fresh agent cards show Groq, model name and model turns, rather than previous demo rules.
+- [ ] Triage shows Groq/model turns in LLM mode; tracing and escalation show Rule-based / No LLM.
 - [ ] Lot `38` returns Retailers A, B, and C only.
 - [ ] Evidence upload works with a small sample image or PDF.
 - [ ] The full workflow has been completed once on the deployed environment.
@@ -75,8 +76,8 @@ All seeded accounts use the deployed `DEMO_PASSWORD`.
 ## Fallback demo
 
 Keep one pre-created case at each major stage. If an external model call fails, show the explicit
-failure and a previously completed Groq run. Offline simulation requires explicitly selecting
-`AGENT_MODE=demo` and labeling it as simulation; never present that as a live model investigation.
+failure and a previously completed triage run. Offline triage simulation requires explicitly selecting
+`AGENT_MODE=demo` and labeling it as simulation. Traceability/escalation remain rule-based in either mode.
 If a live upload fails, use an existing evidence record and continue through approval and escalation.
 
 ## Backend workflow enforcement (2026-10-16)

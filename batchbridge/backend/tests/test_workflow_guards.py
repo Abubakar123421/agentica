@@ -203,3 +203,31 @@ def test_non_manufacturer_recommendations_never_dispatch_packet(
     client.post("/api/v1/auth/logout")
     login_user(client, "manufacturer@batchbridge.demo")
     assert not any(row["case_id"] == case_id for row in client.get("/api/v1/escalations").json())
+
+
+def test_information_after_approval_explains_why_traceability_is_locked(client, login_user):
+    path = new_case(client, login_user)
+    proposal = client.get(path).json()["proposals"][0]
+    assert (
+        client.post(
+            f"{path}/approvals",
+            json={
+                "proposal_id": proposal["id"],
+                "decision": "approved",
+            },
+        ).status_code
+        == 200
+    )
+    assert (
+        client.post(
+            f"{path}/information",
+            json={
+                "notes": "New fictional investigation detail saved after approval.",
+            },
+        ).status_code
+        == 200
+    )
+    gate = client.get(path).json()["workflow"]["traceability"]
+    assert gate["can_run"] is False
+    assert "Case information changed after triage" in gate["blocked_reason"]
+    assert client.post(f"{path}/analysis").status_code == 409

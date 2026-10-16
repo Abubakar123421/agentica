@@ -8,7 +8,9 @@
 - Shipment recipients and quantities must come from database records through MCP tools.
 - MCP tools are read-only. Agent output is advisory.
 - Retailer tasks require importer approval.
-- Manufacturer escalation requires an approved batch proposal and a completed retailer finding.
+- Manufacturer escalation requires the current approved batch proposal and findings from every recipient.
+- Triage uses Groq in LLM mode; active traceability/escalation use rules and MCP without model calls.
+- Do not reintroduce LLM/API-key dependencies into the two rule-based stages without user direction.
 - Customer contact information must not enter MCP output, LLM prompts, or manufacturer packets.
 - Every meaningful workflow action must create an audit event.
 

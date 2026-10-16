@@ -1,8 +1,9 @@
 # BatchBridge
 
 BatchBridge is an importer-owned food batch investigation system. Consumers and retailer food
-safety managers report suspected product issues. Three MCP-grounded LangGraph agents triage the
-report, trace the exact batch, and prepare manufacturer escalation evidence. Humans approve every
+safety managers report suspected product issues. Three MCP-grounded LangGraph stages triage the
+report, trace the exact batch, and prepare manufacturer escalation evidence. Triage uses Groq;
+traceability and escalation use database-backed rules without model calls. Humans approve every
 handoff and safety decision.
 
 ## Backend quick start
@@ -25,11 +26,11 @@ Open `http://localhost:8000/docs`. Demo data is seeded by default. Accounts use 
 - `retailer-c@batchbridge.demo`
 - `manufacturer@batchbridge.demo`
 
-Set `GROQ_API_KEY` in the ignored `.env`, with `AGENT_MODE=llm` (the default). Each agent uses Groq
-to select and call read-only MCP tools, inspect results, and submit a validated proposal for human
-review. Restart the backend after changing environment variables. Never put keys in `.env.example`.
-`AGENT_MODE=demo` explicitly selects the older rule-based simulation for offline tests. An LLM-mode
-failure is displayed as a failed run; it never silently switches to demo logic.
+Set `GROQ_TRIAGE_API_KEY` (or the fallback `GROQ_API_KEY`) in ignored `.env` for triage.
+`AGENT_MODE=llm` is the default; `AGENT_MODE=demo` selects explicit offline triage simulation.
+Traceability and escalation always use deterministic rules and read-only MCP records, without
+Groq keys or model calls. Restart after environment changes; never put secrets in `.env.example`.
+Triage failures are explicit and never silently switch to rules.
 
 ## Frontend quick start
 
@@ -41,6 +42,18 @@ npm run dev
 
 Vite proxies `/api` and `/health` to `http://127.0.0.1:8000`. The production Docker image builds the
 responsive React application and serves it from the FastAPI origin.
+
+For a single local URL after installing frontend dependencies:
+
+```bash
+cd frontend
+npm run build
+cd ..
+uvicorn app.main:app --app-dir backend --host 127.0.0.1 --port 8000
+```
+
+Open `http://localhost:8000`. Keep the server terminal running; connection refused means no server
+is listening. Local testing does not require Docker. See `DEMO_RUNBOOK.md` for the full role flow.
 
 ## Verification
 
@@ -64,13 +77,12 @@ The container listens on `0.0.0.0:$PORT`. All durable state is stored in Postgre
   evidence, and complete assigned checks.
 - Triage, traceability, and escalation agents share one read-only MCP evidence server with explicit
   per-agent tool permissions.
-- Groq chooses investigation tool calls and recommendations. Canonical shipment recipients,
-  quantities, product and lot IDs are hydrated from MCP responses and validated before review.
+- Groq chooses triage tools and recommendations. Traceability resolves exact product/lot and
+  recorded shipments; escalation applies documented rules to human inspection findings.
 - Agent cards show execution mode, model, model-turn count, evidence summaries, questions, and MCP
-  calls. Earlier saved runs are labeled as previous demo runs; rerun them to obtain a Groq proposal.
+  calls. Rule-based stages are labeled explicitly; historical results retain their execution mode.
 - Importer approval creates retailer tasks; no tool or model can create them before that approval.
-- Manufacturer escalation requires an approved traceability proposal, at least one human retailer
-  finding, an escalation-agent packet, and a second importer approval.
+- Manufacturer escalation requires an approved traceability proposal, completed findings from every assigned retailer, an escalation-agent packet, and a second importer approval.
 
 The interactive OpenAPI contract at `/docs` covers the full API.
 
@@ -82,7 +94,20 @@ The interactive OpenAPI contract at `/docs` covers the full API.
 - [`ARCHITECTURE.md`](ARCHITECTURE.md): components, trust boundaries, data flow, and deployment shape.
 - [`API_REFERENCE.md`](API_REFERENCE.md): endpoint and MCP tool map.
 - [`IMPLEMENTATION_PLAN.md`](IMPLEMENTATION_PLAN.md): checklist from product scope through submission.
+- [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md): detailed completed-work and verification handoff.
 - [`DEMO_RUNBOOK.md`](DEMO_RUNBOOK.md): judge-ready story, checks, and fallback path.
 - [`FRONTEND_REFERENCE.md`](FRONTEND_REFERENCE.md): responsive UI direction.
 - [`DEPLOYMENT.md`](DEPLOYMENT.md): Alternate Clouds setup and verification.
 
+
+## Hybrid execution update (2026-10-17)
+
+Only triage uses Groq (`GROQ_TRIAGE_API_KEY`, falling back to `GROQ_API_KEY`).
+Traceability and escalation always use deterministic rules and read-only MCP records,
+regardless of AGENT_MODE; their dedicated API-key slots were removed. Traceability
+requires an exact SKU/name/known alias plus lot and recorded shipments. Escalation
+requires every assigned retailer finding; observed issues prepare a manufacturer
+packet, inconclusive findings without observed issues propose targeted follow-up,
+and otherwise propose monitoring. Every consequential action still requires human
+approval. These stages are labeled rule-based in the UI, not LLM-powered.
+Existing pending results from another execution mode can be rerun; history remains.

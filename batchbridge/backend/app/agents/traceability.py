@@ -2,9 +2,7 @@ from typing import Any
 
 from mcp import ClientSession
 
-from app.agents.agentic import run_groq_agent
 from app.agents.schemas import TraceabilityResult
-from app.config import get_settings
 from app.services.mcp_client import EvidenceMCPClient
 
 
@@ -17,16 +15,12 @@ def _match_product(case: dict, products: list[dict]) -> tuple[dict | None, str]:
             return product, "exact_name"
         if query in {alias.lower() for alias in product.get("aliases", [])}:
             return product, "known_alias"
-    if len(products) == 1:
-        return products[0], "known_alias"
     return None, "unresolved"
 
 
 async def run_traceability_agent(
     client: EvidenceMCPClient, session: ClientSession, case_id: str
 ) -> dict[str, Any]:
-    if get_settings().agent_mode == "llm":
-        return await run_groq_agent("traceability", client, session, case_id)
     case = await client.call("traceability", session, "get_case", {"case_id": case_id})
     products = await client.call(
         "traceability", session, "search_products", {"query": case.get("product_name", "")}
@@ -72,6 +66,9 @@ async def run_traceability_agent(
     elif not batch or not batch.get("found"):
         missing.append("known_importer_batch")
 
+    if batch and batch.get("found") and not shipments:
+        missing.append("recorded_shipments")
+
     proposal_type = "request_information" if missing else "retailer_inspections"
     confidence = "low" if missing else ("medium" if match_method == "known_alias" else "high")
     rationale = (
@@ -105,4 +102,4 @@ async def run_traceability_agent(
         ],
         ai_assessment=ai_assessment,
         tool_calls=client.trace,
-    ).model_dump() | {"execution_mode": "demo_rules", "model": None}
+    ).model_dump() | {"execution_mode": "rules", "model": None}

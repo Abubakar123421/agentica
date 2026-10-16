@@ -1,137 +1,146 @@
-# BatchBridge product context
+# BatchBridge — current project context
 
-## Purpose
+Updated: 2026-10-17. This file describes the current implementation, superseding earlier
+plans for three LLM-powered stages. See `IMPLEMENTATION_STATUS.md` for the detailed handoff.
 
-BatchBridge helps a country importer investigate suspected food contamination across fragmented
-retailer records. It does not diagnose contamination or trigger recalls automatically.
+## Product and ownership
 
-## Ownership and roles
+BatchBridge is an importer-owned food complaint and batch investigation application.
+The importer maintains products, manufacturer lots, received quantities, and retailer shipments.
+The workflow links one suspected customer issue to the exact recorded distribution chain.
+A complaint, photo, or visual inspection does not prove contamination. Humans control tasks,
+manufacturer handoffs, final verdicts, and closure.
 
-- The importer owns the system, product catalogue, received batches, and distribution records.
-- A customer selects a supermarket, describes the issue, and submits 1–3 packaging/problem photos
-  through the public importer portal. Customers do not enter product codes or lot numbers.
-- A retailer food safety manager can submit an inspection finding or add evidence to a case.
-- A retailer food safety manager can review a customer case and explicitly forward it to the
-  importer with notes. Direct customer reports remain visible to the importer before this review.
-- Importer investigators approve retailer checks and manufacturer escalations.
-- The overseas manufacturer reviews the evidence packet and responds in the portal.
-- "Retailer food safety manager" means internal retailer staff. It is distinct from a government
-  food safety officer.
+## Current execution model
 
-## Core workflow
+| Stage | Execution | Groq required? | Human checkpoint |
+| --- | --- | --- | --- |
+| Triage | Bounded LLM tool-calling investigation; explicit offline simulation available | Yes in `AGENT_MODE=llm` | Importer reviews the latest triage proposal |
+| Traceability | Deterministic matching and MCP database lookups | No | Importer approves retailer tasks |
+| Escalation | Deterministic evidence aggregation and recommendation rules | No | Importer approves packet, follow-up checks, or monitoring |
+| Manufacturer response | Authenticated human reviewer | No | Manufacturer submits its response |
+| Verdict and closure | Authenticated importer | No | Importer records the decision and notes |
 
-`New report -> Triage -> Retailer/importer review -> Traceability -> Retailer checks -> Escalation -> Manufacturer review -> Importer verdict -> Closed`
+All three investigation stages still run through the existing LangGraph workflow and persisted
+proposal/human-interrupt mechanism. Traceability and escalation are rule-based workflow stages,
+not LLM reasoning agents. Do not describe the current system as three LLM-powered agents.
+MCP is a tool-access protocol, independent of the number of agents or models.
 
-`Waiting for information` is a temporary case state. A report is suspicion, not proof. The agent may
-recommend a batch match and draft handoffs, but a human decides whether to send them. A negative
-visual inspection never clears an entire batch. The normal workflow waits for findings from every assigned retailer; no emergency bypass is implemented.
+## Roles and interfaces
 
-### Agent responsibilities and approval gates
+- Customer: public photo complaint, supermarket selection, description, optional contact/date,
+  private tracking token. Customers do not need to identify a lot themselves.
+- Supermarket food safety manager: internal retailer staff, not a government officer. Verifies
+  product identity, forwards customer complaints, creates officer reports, completes assigned checks.
+- Importer investigator: imports batch/shipment CSVs, runs investigations, reviews proposals,
+  coordinates supermarket checks, approves manufacturer packets, records the final verdict.
+- Manufacturer reviewer: accesses packets addressed to its organization and submits a response.
 
-1. **Triage Agent:** for photo reports, runs after the supermarket officer verifies and forwards the
-   case. Legacy structured reports and retailer reports still run triage on creation. It reads the case, product
-   candidates, and related reports, then recommends forwarding, requesting information, or review.
-   A retailer may review and forward the report; an importer investigator must separately approve the latest
-   triage proposal before traceability can start.
-2. **Traceability Agent:** runs after explicit approval of the latest triage proposal. It resolves product
-   plus manufacturer lot against importer records and proposes retailer checks from exact shipment
-   records. An importer investigator approves the proposal before checks are assigned.
-3. **Escalation Agent:** runs after the traceability proposal is approved and every assigned retailer
-   submits a human finding. It prepares an evidence packet and flags missing or conflicting
-   information. The importer separately approves sending the packet to the manufacturer.
-4. **Manufacturer and importer:** a manufacturer reviewer submits the company response. The importer
-   investigator records the final human verdict and closes the case.
+## End-to-end workflow
 
-Each agent is a separately queued LangGraph run, writes a typed proposal, and pauses at a human
-interrupt. The API and database enforce the gates; resuming a graph is not the source of truth for
-an approval. A retailer can create an inspection report or review a customer report, and customer
-reports can also enter the importer queue directly.
+1. A photo report stores a case and 1–3 validated JPEG/PNG images atomically, without starting triage.
+2. The originating supermarket previews a simulated barcode lookup, confirms product/lot identity,
+   and forwards the complaint. Forwarding starts triage; it does not approve triage's recommendation.
+3. Triage reads case/catalogue/related-report evidence through MCP and proposes the next action.
+4. The importer explicitly approves the latest triage proposal. An information request must be
+   answered and followed by a new triage run and review before tracing.
+5. Traceability resolves exact SKU/name/known alias plus manufacturer lot, reads shipments,
+   excludes nonrecipients, and proposes retailer checks from canonical database records.
+6. Importer approval creates in-app inspection tasks. Each assigned supermarket submits a finding.
+7. Escalation waits for findings from every recipient in the current approved shipment plan.
+8. Rule-based escalation proposes a manufacturer packet if any issue was observed; otherwise
+   targets inconclusive findings for follow-up, or recommends monitoring if none remain.
+9. Importer approval applies the proposed action. A manufacturer packet appears in the scoped inbox;
+   follow-up reopens only selected inspections; monitoring creates no manufacturer packet.
+10. The manufacturer responds. The importer reviews the response, records a verdict and notes,
+    and closes the case. Public tracking reflects the final state.
 
-## Data rules
+Legacy structured reports and officer-created reports start triage on creation.
+No email/SMS or external manufacturer dispatch is implemented; communication uses portal queues.
 
-- A batch is identified by product plus manufacturer lot number. A number such as `38` is not
-  globally unique.
-- Recipient retailers and quantities always come from shipment records, never from the LLM.
-- Every state transition, approval, and response is append-only in the audit timeline.
-- Public tracking uses a random token. Customer contact details are excluded from agent prompts and
-  manufacturer packets.
+## Safety and approval invariants
 
-## Technical decisions
+- Match a batch by product plus lot, never lot alone. No single-search-result shortcut is accepted
+  by the rule-based traceability matcher; it needs an exact SKU, name, or known alias.
+- All recipient identifiers and quantities come from actual shipment records through MCP.
+- One shared stdio MCP server exposes 11 read-only tools with stage-specific allowlists.
+- MCP cannot create tasks, approve proposals, send packets, or record verdicts.
+- Approvals are immutable decisions tied to a proposal. An identical retry is idempotent;
+  a different decision for the same proposal is rejected.
+- `AgentRun.input_snapshot` captures identity, information revision, and relevant upstream proposal
+  versions; escalation also tracks evidence/finding revisions. Earlier approvals never authorize
+  newer runs or changed inputs.
+- Saving additional investigation facts invalidates prior input snapshots. Rerun triage and review
+  the new proposal. Identity changes are blocked after inspection tasks exist.
+- A changed shipment plan must be traced and reviewed again before escalation.
+- Final verdict/closure requires a manufacturer response and notes. Operational status updates
+  cannot bypass task or packet approvals.
+- Reporter contact details are excluded from MCP and manufacturer packets.
 
-- API: Python 3.12, FastAPI, SQLAlchemy, Alembic.
-- Workflow: three separately invoked bounded LangGraph agents for triage, traceability, and
-  escalation, each ending at an explicit human interrupt and persisted proposal.
-- Model: Groq `openai/gpt-oss-20b`, configurable with `GROQ_MODEL`.
-- Agent mode: `AGENT_MODE=llm` by default. Groq chooses MCP tool calls, evaluates returned evidence,
-  and produces the recommendation, confidence, rationale, summary and follow-up questions. The
-  application validates the final proposal against the actual tool responses. It never accepts
-  invented product/lot IDs or model-written retailer lists. Groq failures remain explicit failures;
-  `AGENT_MODE=demo` is an explicitly chosen offline simulation used by regression tests.
-- Each run allows up to 16 model turns and 30 MCP calls, with an overall 180-second timeout and
-  bounded rate-limit retries. A read-only evidence ledger scopes case IDs and binds batch tools to
-  retrieved products and the case's lot. Only the API can apply human-approved mutations.
-- Secrets belong in ignored `.env`; `.env.example` must stay blank for `GROQ_API_KEY`.
-- Tools: one real MCP stdio server with read-only case, product, batch, shipment, report, evidence,
-  timeline, distribution, and inspection lookups. Each agent has a strict tool allowlist; approvals
-  and mutations stay in authenticated API handlers.
-- Database: PostgreSQL 17 on Alternate Clouds; SQLite is supported for local development and tests.
-- Authentication: seeded password-protected staff accounts, server-side sessions, fixed roles and
-  organizations, no public signup.
-- Notifications: in-app inboxes only.
-- Frontend target: responsive React, TypeScript, Vite, and Tailwind served from the same application
-  origin in production.
-- Production image: Docker builds the frontend with Node, copies its static assets into the Python
-  image, runs Alembic migrations, then starts FastAPI/Uvicorn on the platform-provided port.
+## Rules for traceability and escalation
 
-## Demo dataset
+Traceability requests information for unresolved product, missing lot, unknown importer batch,
+or absent shipment records. A successful proposal includes recipients, excluded retailers,
+related reports, confidence, matching rationale, evidence references, and MCP calls.
+It does not require laboratory confirmation, recall status, or prior inspection findings.
 
-Photo reports use `source=customer_photo` and start with an unidentified product. A supermarket
-officer previews the simulated barcode lookup, checks the photos, and confirms forwarding. The
-server resolves the product and lot again, checks a matching shipment to that supermarket, saves
-`demo_barcode_verified` in the audit timeline, and starts triage. Importer traceability cannot bypass
-this officer handoff. This verifies product identity only; the safety verdict remains unconfirmed.
+Escalation requires current approved traceability and completed findings from all recipients:
 
-The customer form includes **Try with a demo photo**, which creates fictional packaging with the
-code `DEMO-CHOC-38`. The lookup maps this code to `CHOC-100` lot `38`; `DEMO-CHOC-39` maps to lot `39`.
-These are explicit demo fixtures, with no image decoding, real barcode scanning, or OCR. Photos
-are stored atomically with the report in the existing evidence table (JPEG/PNG, max 5 MB each).
+| Findings | Proposal type | Approved effect |
+| --- | --- | --- |
+| At least one `issue_observed` | `manufacturer_escalation_packet` | Create manufacturer inbox item |
+| No observed issue, at least one `unable_to_assess` | `retailer_followup` | Reopen the selected inconclusive checks |
+| No observed or inconclusive issue | `monitoring` | Record the review; no manufacturer packet |
 
-Fictional product `CHOC-100`, manufacturer lot `38`: 10,000 received; 3,000 sent to Retailer A,
-2,000 to Retailer B, 1,000 to Retailer C, and 4,000 retained by the importer. Retailer D only receives
-lot `39` and must never appear in lot `38` results.
+Conflicting visual findings are included in the evidence packet. Neither an observed issue nor a
+negative inspection automatically establishes the safety of the entire lot.
 
-## Deferred after the hackathon
+## Configuration and runtime
 
-Government integrations, live retailer ERP connectors, OCR, email/SMS notifications, automated
-recalls, multi-importer tenancy, and n8n automation.
+- Backend: FastAPI, SQLAlchemy, Alembic; SQLite locally, PostgreSQL planned for deployment.
+- Frontend: React, TypeScript, Vite, Tailwind. Built assets are served by FastAPI when available.
+- Local app: `http://localhost:8000`; separate Vite development server: `http://localhost:5173`.
+- Groq model: `GROQ_MODEL`, currently defaulting to `openai/gpt-oss-20b`.
+- Only triage uses `GROQ_TRIAGE_API_KEY`, falling back to `GROQ_API_KEY` when blank.
+- Traceability/escalation key slots were removed from `.env`, `.env.example`, and Settings.
+  Those stages always use rules, independent of `AGENT_MODE` and Groq availability.
+- `AGENT_MODE=demo` selects offline triage simulation. It does not change the two rule-based stages.
+- Restart after changing `.env`; never print, stage, or commit secrets.
+- Long Groq cooldowns (>45 seconds) produce an explicit retry-time error instead of repeated
+  shortened waits. LLM failures never silently turn into demo decisions.
+- UI execution tags are `llm`, `rules`, or historical `demo_rules`. Old results keep their history;
+  pending proposals from another execution mode can be superseded by rerunning the stage.
 
+## Fictional demo fixture
 
-## Backend workflow enforcement (2026-10-16)
+Product `CHOC-100`: SweetCo Alpine Milk Chocolate 100g; manufacturer SweetCo GmbH.
+Lot 38: 10,000 received; CityMart A 3,000, FreshBasket B 2,000, Family Grocer C 1,000,
+4,000 retained. Value Market D received lot 39 only and must be excluded from lot 38 checks.
+`DEMO-CHOC-38` and `DEMO-CHOC-39` are simulated mappings, not image decoding or OCR.
+Two generated fictional photos are in `examples/demo-evidence/`.
 
-- Every triage result requires a new importer approval; supermarket forwarding is a separate decision.
-- Approvals apply only to the latest run and its saved input versions. Old decisions never approve new results.
-- Traceability requires current approved triage without an outstanding information request.
-- Escalation requires a current approved shipment plan and completed findings from all assigned supermarkets.
-- More-check recommendations reopen the selected supermarket tasks after approval; monitoring sends no manufacturer packet.
-- Only an approved manufacturer-escalation recommendation creates the manufacturer inbox item.
-- `POST /api/v1/cases/{id}/information` accepts notes and optional corrected product_name/batch_number.
-  Saving information invalidates earlier proposals; rerun triage and review the new result.
-  Identity corrections are blocked once retailer tasks exist.
-- Case detail includes backend-authoritative `workflow` gates, proposal `review_block_reason`,
-  named supermarket progress, and the manufacturer's response.
-- Final verdict/closure requires a manufacturer response and reviewer notes. Operational statuses
-  cannot bypass proposal approvals through the status endpoint.
-- Existing historical decisions are retained. Runs predating input snapshots need a new run and review.
-- Notifications remain in-app task queues; external email/SMS dispatch is not implemented.
+Seeded logins: `importer@batchbridge.demo`, `retailer-a@batchbridge.demo`,
+`retailer-b@batchbridge.demo`, `retailer-c@batchbridge.demo`, `manufacturer@batchbridge.demo`.
+Passwords come from `DEMO_PASSWORD`; production credentials must be set through deployment secrets.
+Local resets retain seed accounts/catalogue/shipments and clear complaints and workflow history,
+after a backup. Database files and backups are not part of Git.
 
-## Clean local test baseline (2026-10-16)
+## Verification and latest local handoff
 
-The local SQLite database was reset after saving a backup outside the repository.
-It starts with zero complaints, evidence uploads, agent runs, proposals, approvals,
-retailer inspections, manufacturer escalations, and prior login sessions.
-Demo seed data remains: 5 staff accounts, 1 product, 2 batches, and 4 shipments.
-Submit a new public photo complaint to begin the full workflow. Existing browser
-sessions must sign in again because database user/session IDs were recreated.
-Groq configuration remains in the ignored `.env`; agent mode stays `llm`.
-The local database and backup are not committed. A fresh checkout needs migrations
-and demo seeding to reproduce this baseline; see the existing run instructions.
+35 backend tests passed, Ruff passed, frontend TypeScript/Vite build passed.
+A live MCP check returned the expected three retailers for lot 38 without a model call.
+The latest local test case `BB-19BB1B3CA0` produced a rule-based manufacturer packet awaiting
+importer approval. This is local state only, not seeded or committed data, and can change in use.
+No reset is needed to use the rule-based stages; existing approvals/findings are preserved.
+
+## Known limitations and next work
+
+- No real barcode decoding, OCR, ERP integration, email/SMS delivery, regulator connection, or
+  laboratory integration. No autonomous contamination diagnosis or recall.
+- Explicit demo seed data is fictional; the system's conclusions depend on connected records.
+- In-process execution and in-memory graph checkpoints are not a distributed worker system.
+  Database decisions are authoritative, and queued/running runs are recovered at startup.
+- Monitoring has no scheduled follow-up worker; a human decides the next action.
+- Multi-importer tenancy, managed backups, and production scaling remain future work.
+- Alternate Clouds deployment, container smoke test, persistence verification, and browser
+  keyboard/viewport checks remain unverified. See deployment checklist; do not claim them complete.

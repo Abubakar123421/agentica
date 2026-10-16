@@ -6,7 +6,7 @@ from langgraph.types import Command
 from sqlalchemy import func, select
 
 from app.audit import add_audit
-from app.config import get_settings
+from app.config import agent_execution_mode
 from app.database import SessionLocal
 from app.models import AgentRun, Case, Proposal
 from app.services.case_workflow import input_snapshot
@@ -27,10 +27,7 @@ def queue_investigation(db, case_id: str, agent_type: str, created_by_user_id: s
         and active.status == "awaiting_human"
         and (
             active.input_snapshot != snapshot
-            or (
-                get_settings().agent_mode == "llm"
-                and (active.result or {}).get("execution_mode") != "llm"
-            )
+            or (active.result or {}).get("execution_mode") != agent_execution_mode(agent_type)
         )
     ):
         old_proposal = db.scalar(select(Proposal).where(Proposal.agent_run_id == active.id))

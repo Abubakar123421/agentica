@@ -57,7 +57,8 @@ Browser clients must send cookies on authenticated requests.
 | `GET` | `/api/v1/imports/templates/{kind}` | Download a batch or shipment CSV template |
 | `POST` | `/api/v1/imports/batches` | Validate and import batch records |
 | `POST` | `/api/v1/imports/shipments` | Validate and import shipment records |
-| `PATCH` | `/api/v1/cases/{case_id}/status` | Update case status or final human verdict |
+| `PATCH` | `/api/v1/cases/{case_id}/status` | Update permitted state or final human verdict with response/notes prerequisites |
+| `POST` | `/api/v1/cases/{case_id}/information` | Save investigation facts/corrections; invalidate prior input snapshots |
 | `POST` | `/api/v1/cases/{case_id}/analysis` | Queue the MCP-grounded traceability agent |
 | `POST` | `/api/v1/cases/{case_id}/escalation-analysis` | Queue escalation after every assigned retailer responds |
 | `GET` | `/api/v1/cases/{case_id}/analysis/{run_id}` | Poll investigation status and result |
@@ -80,10 +81,10 @@ does not update the case. Case detail now includes `evidence`, `retailer_review`
 
 Triage is automatically queued on creation for legacy structured and retailer reports. Retailer staff
 can also run triage and forward or hold a customer report. Traceability can start after retailer
-forwarding or importer approval of triage. Only the importer can approve proposals, create retailer
+forwarding (for photo reports) and explicit importer approval of the latest triage proposal. Only the importer can approve proposals, create retailer
 checks, or approve the manufacturer packet. A traceability proposal creates checks only when
-approved; escalation analysis is rejected until an approved traceability result and a completed
-retailer finding exist.
+approved; escalation analysis requires the current approved traceability result and completed
+findings from every assigned retailer.
 
 ## Manufacturer endpoints
 
@@ -110,11 +111,12 @@ The stdio server in `backend/app/mcp_server.py` exposes these read-only tools:
 
 Tool output preserves database identifiers. Reporter contact details are intentionally absent.
 
-In `AGENT_MODE=llm`, the Groq model selects tool calls and submits a proposal validated against MCP
-results. Agent results include `execution_mode=llm`, `model`, `llm_turns`, and `ai_assessment` with a
-summary, confidence and unanswered questions. Tool traces contain successful evidence reads. API
-or validation failures mark the run failed, without switching to rules. `AGENT_MODE=demo` is the
-explicit offline simulation path and marks results `execution_mode=demo_rules`.
+In `AGENT_MODE=llm`, triage uses Groq to select tools and submit a validated proposal. Its
+results include `execution_mode=llm`, `model`, `llm_turns`, and `ai_assessment`. Explicit offline
+triage uses `execution_mode=demo_rules`. Traceability and escalation always return
+`execution_mode=rules`, `model=null`, rationale, evidence references, and successful MCP traces.
+All stage routes, role checks, and human approvals remain the same. Long Groq quota waits fail
+with a provider retry time; rule-based stages never call Groq.
 
 ### Per-agent tool allowlists
 

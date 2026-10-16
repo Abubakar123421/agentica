@@ -191,6 +191,10 @@ def test_trace_proposal_uses_canonical_shipments_and_rejects_unread_or_wrong_lot
         ]
     )
     assert finalize_trace(decision, ledger)["retailers"] == recipients
+    decision.proposal_type = "request_information"
+    with pytest.raises(ValueError, match="concrete missing traceability fact"):
+        finalize_trace(decision, ledger)
+    decision.proposal_type = "retailer_inspections"
     with pytest.raises(ValueError, match="current case ID"):
         ledger.validate_call("get_case", {"case_id": "another-case"})
     with pytest.raises(ValueError, match="do not invent a lot"):
@@ -278,3 +282,50 @@ def test_escalation_action_matches_model_recommendation(recommendation, expected
     ledger.records[4][2][0]["status"] = "pending"
     with pytest.raises(ValueError, match="All assigned supermarkets"):
         finalize_escalation(decision, ledger)
+
+
+@pytest.mark.asyncio
+async def test_long_quota_cooldown_fails_promptly_with_provider_retry_time(monkeypatch):
+    response = httpx.Response(
+        429,
+        request=httpx.Request("POST", "https://api.groq.com/test"),
+        headers={"retry-after": "526"},
+    )
+    model = ScriptedModel([RateLimitError("quota exhausted", response=response, body={})])
+    delays = []
+
+    async def no_wait(delay):
+        delays.append(delay)
+
+    monkeypatch.setattr(common.asyncio, "sleep", no_wait)
+    with pytest.raises(common.AgentRateLimitError, match="Retry after 527 seconds"):
+        await common.invoke_with_rate_limit_retry(model, [])
+    assert delays == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["triage", "traceability", "escalation"])
+@pytest.mark.parametrize("dedicated", [False, True])
+async def test_each_agent_uses_only_assigned_key_or_shared_default(monkeypatch, stage, dedicated):
+    settings = SimpleNamespace(
+        groq_api_key="test-shared",
+        groq_model="test-model",
+        groq_triage_api_key=None,
+        groq_traceability_api_key=None,
+        groq_escalation_api_key=None,
+    )
+    if dedicated:
+        for name in ("triage", "traceability", "escalation"):
+            setattr(settings, f"groq_{name}_api_key", f"test-{name}")
+    captured = {}
+
+    def capture_model(**kwargs):
+        captured.update(kwargs)
+        raise ValueError("Stop before making any provider request")
+
+    monkeypatch.setattr(common, "get_settings", lambda: settings)
+    monkeypatch.setattr(common, "ChatGroq", capture_model)
+    mcp = FakeMCP()
+    with pytest.raises(RuntimeError, match="model configuration failed"):
+        await run_groq_agent(stage, mcp, mcp, "c1")
+    assert captured["api_key"] == (f"test-{stage}" if dedicated else "test-shared")

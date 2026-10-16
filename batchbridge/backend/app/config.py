@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from dotenv import load_dotenv
@@ -19,13 +19,14 @@ class Settings:
     database_url: str
     app_base_url: str
     session_secret: str
-    groq_api_key: str | None
+    groq_api_key: str | None = field(repr=False)
     groq_model: str
     cookie_secure: bool
     allowed_origins: tuple[str, ...]
     seed_demo_data: bool
     demo_password: str
     agent_mode: str
+    groq_triage_api_key: str | None = field(default=None, repr=False)
     session_hours: int = 12
     max_evidence_bytes: int = 5 * 1024 * 1024
 
@@ -58,6 +59,7 @@ def get_settings() -> Settings:
         app_base_url=os.getenv("APP_BASE_URL", "http://localhost:8000").rstrip("/"),
         session_secret=session_secret,
         groq_api_key=os.getenv("GROQ_API_KEY") or None,
+        groq_triage_api_key=os.getenv("GROQ_TRIAGE_API_KEY", "").strip() or None,
         groq_model=os.getenv("GROQ_MODEL", "openai/gpt-oss-20b"),
         cookie_secure=cookie_secure,
         allowed_origins=origins,
@@ -65,3 +67,9 @@ def get_settings() -> Settings:
         demo_password=os.getenv("DEMO_PASSWORD", "BatchBridgeDemo2026!"),
         agent_mode=agent_mode,
     )
+
+
+def agent_execution_mode(agent_type: str) -> str:
+    if agent_type in {"traceability", "escalation"}:
+        return "rules"
+    return "llm" if get_settings().agent_mode == "llm" else "demo_rules"

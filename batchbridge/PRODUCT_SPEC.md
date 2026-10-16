@@ -70,7 +70,7 @@ but all safety decisions remain attributable to a named human reviewer.
 - Resolve a batch only from product identity plus manufacturer lot number.
 - List only retailers present in the importer's shipment records for the matched batch.
 - Show uncertainty, sources, and the reason for each suggested action.
-- Use Groq to choose read-only MCP tools and produce investigation recommendations in LLM mode.
+- Use Groq for triage in LLM mode; traceability and escalation use deterministic MCP-backed rules.
 - Validate operational identifiers and retailer assignments against actual MCP evidence.
 - Show model summaries, follow-up questions, execution mode, model name and tool traces.
 - Show failures explicitly when the LLM is unavailable; offline simulation requires `AGENT_MODE=demo`.

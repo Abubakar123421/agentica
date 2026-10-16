@@ -16,19 +16,33 @@ MAX_MODEL_TURNS = 16
 MAX_TOOL_CALLS = 30
 
 
+class AgentRateLimitError(RuntimeError):
+    """Provider cooldown exceeds the bounded interactive retry window."""
+
+
 async def invoke_with_rate_limit_retry(model, messages):
     for attempt in range(4):
         try:
             return await model.ainvoke(messages)
         except RateLimitError as exc:
-            if attempt == 3:
-                raise
             retry_after = exc.response.headers.get("retry-after", "10")
             try:
                 delay = float(retry_after)
             except ValueError:
                 delay = 10
-            await asyncio.sleep(min(max(delay, 1), 45))
+            if delay > 45:
+                raise AgentRateLimitError(
+                    f"Groq quota exceeded. Retry after {int(delay) + 1} seconds "
+                    "as requested by the provider. Your approval is saved; "
+                    "rerun this agent after the cooldown. No fallback was used."
+                ) from None
+            if attempt == 3:
+                raise AgentRateLimitError(
+                    "Groq rate limit persisted after bounded retries. "
+                    "Wait for your provider quota to recover and rerun this agent. "
+                    "Your approval is saved. No fallback was used."
+                ) from None
+            await asyncio.sleep(max(delay, 1))
 
 
 class EvidenceLedger:
@@ -92,8 +106,12 @@ async def run_tool_agent(
     finalize: Callable[[BaseModel, EvidenceLedger], dict],
 ) -> dict:
     settings = get_settings()
-    if not settings.groq_api_key:
-        raise RuntimeError("GROQ_API_KEY is missing. Configure .env and restart the backend.")
+    api_key = getattr(settings, f"groq_{agent_type}_api_key", None) or settings.groq_api_key
+    if not api_key:
+        raise RuntimeError(
+            f"GROQ_API_KEY is missing and GROQ_{agent_type.upper()}_API_KEY is unset. "
+            "Configure .env and restart the backend."
+        )
     available = await session.list_tools()
     tools = [
         {
@@ -120,7 +138,7 @@ async def run_tool_agent(
     try:
         model = ChatGroq(
             model=settings.groq_model,
-            api_key=settings.groq_api_key,
+            api_key=api_key,
             temperature=0,
             timeout=35,
             max_retries=0,
@@ -152,7 +170,9 @@ async def run_tool_agent(
                 "submit_decision alone after reading the needed evidence. If validation fails, "
                 "gather missing "
                 "evidence or correct the proposal; do not fabricate records. "
-                "Keep summaries under 90 words and use at most 3 questions.\n\n" + instructions
+                "Keep summaries under 90 words and use at most 3 questions. "
+                "Batch independent tool calls together once their identifiers are known. "
+                "Reuse evidence already read instead of repeating lookups.\n\n" + instructions
             )
         ),
         HumanMessage(
@@ -164,6 +184,8 @@ async def run_tool_agent(
     for turn in range(MAX_MODEL_TURNS):
         try:
             response = await invoke_with_rate_limit_retry(model, messages)
+        except AgentRateLimitError:
+            raise
         except BadRequestError as exc:
             body = exc.body if isinstance(exc.body, dict) else {}
             error = body.get("error", body)
