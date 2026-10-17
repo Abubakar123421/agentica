@@ -93,3 +93,14 @@ This document is a deployment checklist, not proof of deployment. The commands a
 been rerun against the current cloud CLI during this documentation update. Confirm the current
 platform instructions before executing them. Container smoke testing, live PostgreSQL persistence,
 and full Alternate Clouds deployment verification remain pending.
+# Vercel deployment
+
+The Vercel project uses `batchbridge` as its root directory. `vercel.json` builds the Vite
+frontend from `frontend/` and routes `/api/*`, `/health/*`, `/docs`, and `/openapi.json` to the
+FastAPI application through `api/index.py`. The browser and API therefore share one origin, so
+session cookies and the frontend's relative API URLs continue to work without a separate API host.
+
+Set `DATABASE_URL`, `APP_BASE_URL`, `ALLOWED_ORIGINS`, `SESSION_SECRET`, `COOKIE_SECURE`,
+`DEMO_PASSWORD`, `AGENT_MODE`, and the Groq key variables in Vercel before using authenticated or
+agent-backed workflows. The database must be externally reachable; a provider-only internal DNS
+name cannot be resolved by Vercel Functions. Apply Alembic migrations to the database separately.
