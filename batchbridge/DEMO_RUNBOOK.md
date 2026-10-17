@@ -1,4 +1,4 @@
-# BatchBridge demo runbook
+# Escalera demo runbook
 
 ## Demo goal
 
@@ -13,7 +13,7 @@ investigation while AI gathers evidence and humans control every safety action.
 - Retailer A received 3,000, Retailer B received 2,000, and Retailer C received 1,000.
 - The importer retained 4,000.
 - Retailer D received only lot `39` and must not be included in lot `38` tasks.
-- Eight fictional, named lot `38` complaints (`BB-DEMO-001` through `BB-DEMO-008`) are seeded
+- Eight fictional, named lot `38` complaints (`ESC-DEMO-001` through `ESC-DEMO-008`) are seeded
   idempotently across Retailers A, B, and C. They are already officer-forwarded and ready for the
   importer to run **Review report**. Restarting the app does not duplicate them.
 
@@ -26,11 +26,11 @@ session authentication remain enabled. Set `DEMO_PASSWORD` in the cloud secrets 
 before creating demo accounts there. Changing that variable does not update existing accounts;
 their stored password hashes must also be updated. Never commit `.env` or database files.
 
-- `importer@batchbridge.demo`
-- `retailer-a@batchbridge.demo`
-- `retailer-b@batchbridge.demo`
-- `retailer-c@batchbridge.demo`
-- `manufacturer@batchbridge.demo`
+- `importer@escalera.demo`
+- `retailer-a@escalera.demo`
+- `retailer-b@escalera.demo`
+- `retailer-c@escalera.demo`
+- `manufacturer@escalera.demo`
 
 ## Presentation path
 
@@ -38,7 +38,7 @@ their stored password hashes must also be updated. Never commit `.env` or databa
    selects CityMart Islamabad, and fills a sample complaint. Submit the photo report without entering
    any product or batch code.
 2. Save the returned tracking token and show the customer tracking page.
-3. Sign in as `retailer-a@batchbridge.demo`, open the unidentified complaint and inspect its photo.
+3. Sign in as `retailer-a@escalera.demo`, open the unidentified complaint and inspect its photo.
    Under **Verify, then forward**, enter `DEMO-CHOC-38` (or click **Use demo code**) and select
    **Look up demo barcode**. Explain that this is a simulated fixture, not image decoding. Confirm
    the product/lot checkbox, add notes, and select **Verify & forward to importer**.

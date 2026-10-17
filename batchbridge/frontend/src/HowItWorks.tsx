@@ -1,3 +1,5 @@
+import { Brand } from "./Brand";
+
 const steps = [
   { phase: "Signal", title: "Capture evidence", description: "Complaint, product photos, purchase context, and source stay connected." },
   { phase: "Verify", title: "Confirm identity", description: "Retailer officer verifies product and manufacturer lot before tracing starts." },
@@ -17,17 +19,16 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
     <div className="how-page" id="how-it-works">
       <section className="how-overview" aria-labelledby="how-title">
         <header className="how-intro">
-          <span className="eyebrow">One accountable workflow</span>
           <h1 id="how-title">From complaint to<br />approved action.</h1>
-          <p>BatchBridge turns scattered reports into a precise investigation. Every handoff is approved by a person.</p>
+          <p>Escalera turns scattered reports into a precise investigation. Every handoff is approved by a person.</p>
           <a className="text-link" href="#investigation-workflow">Explore the workflow <span aria-hidden="true">↓</span></a>
           <figure className="how-mini-graph">
-            <figcaption>LangGraph workflow</figcaption>
+            <figcaption><span>LangGraph workflow</span><span className="how-graph-live">Live path</span></figcaption>
             <ol aria-label="Start, run the selected agent, pause for human review, end">
-              <li>Start</li>
-              <li>Run stage</li>
-              <li className="how-mini-gate">Human review</li>
-              <li>End</li>
+              <li><strong>Start</strong><span>Signal</span></li>
+              <li><strong>Run stage</strong><span>Evidence</span></li>
+              <li className="how-mini-gate"><strong>Human review</strong><span>Approval gate</span></li>
+              <li><strong>End</strong><span>Recorded</span></li>
             </ol>
             <small>Triage · Traceability · Escalation</small>
           </figure>
@@ -36,7 +37,7 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
           {steps.map((step, index) => (
             <li key={step.phase}>
               <span className="how-step-number">0{index + 1}</span>
-              <div><span className="eyebrow">{step.phase}</span><h2>{step.title}</h2><p>{step.description}</p></div>
+              <div><h2>{step.title}</h2><p>{step.description}</p></div>
             </li>
           ))}
         </ol>
@@ -44,7 +45,6 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
 
       <section className="how-workflow" id="investigation-workflow" aria-labelledby="workflow-title">
         <header className="how-section-header">
-          <span className="eyebrow">Three agents · Two human approvals</span>
           <h2 id="workflow-title">Agents prepare the work.<br />People make every call.</h2>
           <p>The two importer approvals shown below control shop assignments and manufacturer escalation. The importer also reviews the complaint assessment before tracing.</p>
         </header>
@@ -53,12 +53,12 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
             <div className="how-flow-heading"><span>01</span><h3>Review the report</h3></div>
             <div className="how-sources"><span>Consumer report</span><span>Retailer report</span></div>
             <span className="how-flow-arrow" aria-hidden="true">↓</span>
-            <div className="how-agent"><span className="eyebrow">Agent work</span><strong>Triage agent</strong><small>Groq-powered</small></div>
+            <div className="how-agent"><strong>Triage agent</strong><small>Groq-powered</small></div>
             <p className="how-flow-note">The retailer verifies the product and lot. The importer reviews the complaint assessment before tracing.</p>
           </li>
           <li className="how-flow-stage">
             <div className="how-flow-heading"><span>02</span><h3>Check the shops</h3></div>
-            <div className="how-agent"><span className="eyebrow">Agent work</span><strong>Traceability agent</strong><small>Rule-based · exact lot</small></div>
+            <div className="how-agent"><strong>Traceability agent</strong><small>Rule-based · exact lot</small></div>
             <span className="how-flow-arrow" aria-hidden="true">↓</span>
             <div className="how-human"><span aria-hidden="true">✓</span><div><strong>Importer approves</strong><small>Shop checks are assigned only after approval.</small></div></div>
             <span className="how-flow-arrow" aria-hidden="true">↓</span>
@@ -67,7 +67,7 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
           </li>
           <li className="how-flow-stage">
             <div className="how-flow-heading"><span>03</span><h3>Prepare the handoff</h3></div>
-            <div className="how-agent"><span className="eyebrow">Agent work</span><strong>Escalation agent</strong><small>Rule-based · every finding in</small></div>
+            <div className="how-agent"><strong>Escalation agent</strong><small>Rule-based · every finding in</small></div>
             <span className="how-flow-arrow" aria-hidden="true">↓</span>
             <div className="how-human"><span aria-hidden="true">✓</span><div><strong>Importer approves again</strong><small>Reviews the evidence and proposed handoff.</small></div></div>
             <span className="how-flow-arrow" aria-hidden="true">↓</span>
@@ -84,7 +84,6 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
 
       <section className="how-permissions" aria-labelledby="permissions-title">
         <header className="how-section-header">
-          <span className="eyebrow">Safety controls</span>
           <h2 id="permissions-title">Each role can only do its own part.</h2>
           <p>No tool or model creates retailer tasks before the importer approves. Manufacturer escalation needs every assigned retailer finding and a second approval.</p>
         </header>
@@ -98,7 +97,7 @@ export function HowItWorks({ onLogin }: { onLogin: () => void }) {
         <p className="how-permission-key"><span className="how-permission-yes" aria-hidden="true">●</span> Available to this role <span aria-hidden="true">—</span> Not available</p>
       </section>
       <footer className="how-footer">
-        <a className="brand" href="/">Batch<span className="brand-accent">Bridge</span></a>
+        <a href="/"><Brand /></a>
         <nav aria-label="Footer navigation"><a href="/how-it-works" aria-current="page">How it works</a><a href="/safety-controls">Safety controls</a><button type="button" onClick={onLogin}>Staff portal ↗</button></nav>
       </footer>
     </div>

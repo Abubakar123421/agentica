@@ -7,7 +7,7 @@ from app.services.manufacturer_report import manufacturer_report_csv
 def test_manufacturer_csv_is_readable_and_escapes_spreadsheet_formulas():
     text = manufacturer_report_csv(
         {
-            "case_public_id": "BB-DEMO",
+            "case_public_id": "ESC-DEMO",
             "product": {
                 "name": "Chocolate",
                 "sku": "CHOC-100",

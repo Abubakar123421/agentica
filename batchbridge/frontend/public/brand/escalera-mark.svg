@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title desc">
+  <title id="title">Escalera</title>
+  <desc id="desc">An ascending three-step path inside a rounded square.</desc>
+  <rect x="2" y="2" width="44" height="44" rx="13" fill="#101b18"/>
+  <path d="M11 35v-8h9v-7h9v-7h8v22H11Z" fill="#f8fbf9"/>
+  <path d="M11 35h9v-8h9v-7h8" fill="none" stroke="#b9f568" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="37" cy="13" r="3" fill="#b9f568"/>
+</svg>

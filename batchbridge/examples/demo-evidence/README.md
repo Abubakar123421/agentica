@@ -1,6 +1,6 @@
 # Fictional complaint photos
 
-Generated with the built-in image generation tool for local BatchBridge testing. These images are
+Generated with the built-in image generation tool for local Escalera testing. These images are
 synthetic and are not evidence of an actual food safety incident. They are attached to the seeded
 importer demo complaints in the local database. No application code depends on these source files.
 Printed dates and decorative barcode stripes are illustrative; the demo fixture maps

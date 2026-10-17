@@ -1,4 +1,4 @@
-# BatchBridge implementation plan
+# Escalera implementation plan
 
 ## Phase 0: scope and acceptance criteria
 

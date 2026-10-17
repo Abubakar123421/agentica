@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
 import { api } from "./api";
+import { Brand } from "./Brand";
 import { createDemoPhoto } from "./demoPhoto";
 import { HowItWorks } from "./HowItWorks";
 import type {
@@ -79,6 +80,14 @@ function displayValue(value: unknown, fallback = "Not provided") {
   return value == null || value === "" ? fallback : String(value);
 }
 
+function InvestigationIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6M9 7h6M8 3h8a2 2 0 0 1 2 2v15H6V5a2 2 0 0 1 2-2Z" /><path d="m9 13 2 2 4-4" /></svg>;
+}
+
+function SettingsIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.55V21h-4v-.08A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.52-1.03H3v-4h.08A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88L4.2 7l2.83-2.83.06.06a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.05V3h4v.05a1.7 1.7 0 0 0 1.03 1.52 1.7 1.7 0 0 0 1.88-.34l.06-.06L19.8 7l-.06.06a1.7 1.7 0 0 0-.34 1.88A1.7 1.7 0 0 0 20.92 10H21v4h-.08A1.7 1.7 0 0 0 19.4 15Z" /></svg>;
+}
+
 function ManufacturerReport({ packet, downloadUrl }: { packet: Record<string, unknown>; downloadUrl?: string }) {
   const product = asRecord(packet.product);
   const manufacturer = asRecord(product.manufacturer);
@@ -130,10 +139,7 @@ function Pill({ value }: { value: string }) {
 function PublicNavigation({ onLogin }: { onLogin: () => void }) {
   return (
       <nav className="public-nav">
-        <a className="brand" href="/" aria-label="BatchBridge home">
-          <span className="brand-mark"><i /><i /><i /></span>
-          <span>Batch<span className="brand-accent">Bridge</span></span>
-        </a>
+        <a href="/" aria-label="Escalera home"><Brand /></a>
         <div className="public-links" aria-label="Page navigation">
           <a href="/how-it-works">How it works</a>
           <a href="/safety-controls">Safety controls</a>
@@ -160,9 +166,8 @@ function PublicInfoPage({ page, onLogin }: { page: "how-it-works" | "safety-cont
           <span className="control-chip chip-three">Audit event</span>
         </div>
         <div className="control-copy">
-          <span className="eyebrow">Designed for consequence</span>
           <h2>Evidence organized.<br />People decide.</h2>
-          <p>BatchBridge prepares evidence and suggested next steps. Authorized people approve every operational decision.</p>
+          <p>Escalera prepares evidence and suggested next steps. Authorized people approve every operational decision.</p>
           <div className="control-list">
             <span><i>✓</i> Product and lot matched together</span>
             <span><i>✓</i> Customer contact data stays protected</span>
@@ -254,20 +259,14 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
       <PublicNavigation onLogin={onLogin} />
       <section className="hero-grid">
         <div className="hero-copy">
-          <span className="signal-label"><i /> Human-led food safety response</span>
           <h1>From first report to <em>verified action.</em></h1>
           <p>
-            Report a product concern in minutes. BatchBridge connects verified evidence,
+            Report a product concern in minutes. Escalera connects verified evidence,
             exact batch records, and accountable human decisions in one secure investigation.
           </p>
           <div className="hero-actions">
             <a className="button button-primary" href="#report-form">Report a concern</a>
             <a className="text-link" href="/how-it-works">See how it works <span>↓</span></a>
-          </div>
-          <div className="trust-row" aria-label="Investigation principles">
-            <span><i>01</i> Evidence first</span>
-            <span><i>02</i> Human approved</span>
-            <span><i>03</i> Fully auditable</span>
           </div>
           <form className="tracking-box" onSubmit={track}>
             <div><span className="tracking-icon">⌁</span><span><strong>Track an existing report</strong><small>Use your private tracking token.</small></span></div>
@@ -277,9 +276,7 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
         </div>
         <form className="report-card" id="report-form" onSubmit={submit}>
           <div className="form-header">
-            <span className="form-number">01</span>
             <div>
-              <span className="eyebrow">Start a protected report</span>
               <h2>Tell us what happened</h2>
               <p className="muted">No product codes needed. Officer verifies product and batch.</p>
             </div>
@@ -293,7 +290,6 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
             {retailers.map((retailer) => <option key={retailer.code} value={retailer.code}>{retailer.name}</option>)}
           </select></label>
           <div className="photo-upload">
-            <span className="eyebrow">Product photos</span>
             <strong>Show us the packaging and the problem</strong>
             <p className="muted small" id="photo-help">Include a clear photo of the barcode or printed code. Up to 3 JPEG/PNG photos, 5 MB each.</p>
             <input aria-label="Product photos" aria-describedby="photo-help" type="file" accept="image/jpeg,image/png" multiple disabled={busy || Boolean(created)} onChange={(event) => selectPhotos(Array.from(event.target.files ?? []))} />
@@ -313,17 +309,11 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
             </div>
           )}
           <button className="button button-primary" disabled={busy || Boolean(created)}>{busy ? "Preparing report…" : created ? "Report received" : "Send to supermarket officer"}</button>
-          <p className="form-footnote"><span>●</span> Your report remains private and creates a complete audit record.</p>
+          <p className="form-footnote">Your report remains private and creates a complete audit record.</p>
         </form>
       </section>
-      <section className="proof-strip" aria-label="Platform characteristics">
-        <span>Exact lot matching</span><i />
-        <span>Read-only evidence tools</span><i />
-        <span>Role-based approvals</span><i />
-        <span>End-to-end audit trail</span>
-      </section>
       <footer className="public-footer">
-        <div className="brand"><span className="brand-mark"><i /><i /><i /></span><span>Batch<span className="brand-accent">Bridge</span></span></div>
+        <Brand />
         <p>Food safety intelligence with human accountability.</p>
         <button className="button button-ghost" onClick={onLogin}>Open staff portal</button>
       </footer>
@@ -332,7 +322,7 @@ function PublicReport({ onLogin }: { onLogin: () => void }) {
 }
 
 function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack: () => void }) {
-  const [email, setEmail] = useState("importer@batchbridge.demo");
+  const [email, setEmail] = useState("importer@escalera.demo");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -354,8 +344,8 @@ function Login({ onSuccess, onBack }: { onSuccess: (user: User) => void; onBack:
     <main className="login-shell">
       <button className="back-link" onClick={onBack}>← Return to report form</button>
       <form className="login-card" onSubmit={submit}>
-        <span className="brand-mark large"><i /><i /><i /></span>
-        <div><span className="eyebrow">Operations portal</span><h1>Continue your investigation</h1></div>
+        <Brand className="brand-large" markOnly />
+        <div><h1>Continue your investigation</h1></div>
         <label>Email<input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} /></label>
         <label>Password<input required type="password" value={password} onChange={(event) => setPassword(event.target.value)} /></label>
         {error && <div className="alert danger">{error}</div>}
@@ -708,23 +698,44 @@ function ManufacturerInbox() {
 function StaffApp({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [cases, setCases] = useState<CaseSummary[]>([]);
   const [selected, setSelected] = useState<CaseSummary | null>(null);
+  const nameStorageKey = `escalera.display-name.${user.id}`;
+  const [displayName, setDisplayName] = useState(() => window.localStorage.getItem(nameStorageKey) || user.display_name);
+  const [nameDraft, setNameDraft] = useState(displayName);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => {
     if (user.role === "manufacturer_reviewer") return;
     void api.cases().then((items) => { setCases(items); setSelected(items[0] ?? null); });
   }, [user.role]);
+
+  function saveDisplayName(event: FormEvent) {
+    event.preventDefault();
+    const nextName = nameDraft.trim();
+    if (!nextName) return;
+    window.localStorage.setItem(nameStorageKey, nextName);
+    setDisplayName(nextName);
+    setSettingsOpen(false);
+  }
+
   return (
     <div className="app-shell">
       <aside className="app-sidebar">
-        <div className="brand brand-inverse"><span className="brand-mark"><i /><i /><i /></span><span>Batch<span className="brand-accent">Bridge</span></span></div>
+        <Brand className="brand-inverse" />
         <nav className="side-navigation" aria-label="Workspace">
           <span className="side-label">Workspace</span>
-          <span className="side-item active"><b>□</b> {user.role === "manufacturer_reviewer" ? "Escalations" : "Investigations"}<i>{user.role === "manufacturer_reviewer" ? "" : cases.length}</i></span>
+          <span className="side-item active"><span className="side-icon"><InvestigationIcon /></span>{user.role === "manufacturer_reviewer" ? "Escalations" : "Investigations"}<i>{user.role === "manufacturer_reviewer" ? "" : cases.length}</i></span>
         </nav>
-        <div className="sidebar-status"><i /><span><strong>System operational</strong><small>Evidence services connected</small></span></div>
-        <div className="sidebar-user"><span>{user.display_name.slice(0, 2).toUpperCase()}</span><div><strong>{user.display_name}</strong><small>{label(user.role)}</small></div><button onClick={onLogout} aria-label="Sign out">↗</button></div>
+        <div className="sidebar-account">
+          {settingsOpen && <form className="account-popover" id="account-settings" onSubmit={saveDisplayName}>
+            <div className="account-popover-head"><strong>Account settings</strong><button type="button" onClick={() => setSettingsOpen(false)} aria-label="Close settings">×</button></div>
+            <label>Display name<input maxLength={60} value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} /></label>
+            <button className="button button-primary">Save name</button>
+            <button type="button" className="button button-secondary" onClick={onLogout}>Log out</button>
+          </form>}
+          <div className="sidebar-user"><span>{displayName.slice(0, 2).toUpperCase()}</span><div className="sidebar-identity"><strong>{displayName}</strong><small>{label(user.role)}</small></div><button className="settings-toggle" onClick={() => setSettingsOpen((open) => !open)} aria-label="Open account settings" aria-expanded={settingsOpen} aria-controls="account-settings"><SettingsIcon /></button></div>
+        </div>
       </aside>
       <div className="app-surface">
-        <header className="app-bar"><div><span className="app-kicker">Operations console</span><strong>{user.role === "manufacturer_reviewer" ? "Manufacturer review" : "Food safety investigations"}</strong></div><div className="bar-actions"><span className="live-indicator"><i /> Live records</span><button className="icon-button" onClick={onLogout} aria-label="Sign out" title="Sign out">↗</button></div></header>
+        <header className="app-bar"><div><span className="app-kicker">Operations console</span><strong>{user.role === "manufacturer_reviewer" ? "Manufacturer review" : "Food safety investigations"}</strong></div><div className="bar-actions"><span className="live-indicator"><i /> Live records</span></div></header>
         {user.role === "manufacturer_reviewer" ? <ManufacturerInbox /> : (
           <div className="dashboard-grid">
             <aside className="case-list"><div className="list-heading"><span className="eyebrow">Operational queue</span><h2>Cases</h2><span>{cases.length} active records</span></div>{cases.map((item) => <button className={`case-row ${selected?.id === item.id ? "selected" : ""}`} key={item.id} onClick={() => setSelected(item)}><div><strong>{item.public_id}</strong><span>{item.reporter_name ?? item.product_name}</span></div><Pill value={item.status} /><small>{item.product_name} · Lot {item.batch_number ?? "unknown"}</small></button>)}</aside>
@@ -749,7 +760,7 @@ export default function App() {
       setScreen("login");
     }} />;
   }
-  if (loading) return <div className="loading-screen"><span className="brand-mark large"><i /><i /><i /></span><p>Loading trusted records…</p></div>;
+  if (loading) return <div className="loading-screen"><Brand className="brand-large" markOnly /><p>Loading trusted records…</p></div>;
   if (user) return <StaffApp user={user} onLogout={() => void logout()} />;
   if (screen === "login") return <Login onSuccess={setUser} onBack={() => setScreen("public")} />;
   return <PublicReport onLogin={() => setScreen("login")} />;

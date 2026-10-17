@@ -1,4 +1,4 @@
-"""Initial BatchBridge schema.
+"""Initial Escalera schema.
 
 Revision ID: 20261016_0001
 Revises:

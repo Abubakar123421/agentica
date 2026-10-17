@@ -29,7 +29,7 @@ router = APIRouter(tags=["public reports"])
 
 
 def _public_id() -> str:
-    return f"BB-{secrets.token_hex(5).upper()}"
+    return f"ESC-{secrets.token_hex(5).upper()}"
 
 
 @router.post("/reports", response_model=ReportCreated, status_code=status.HTTP_201_CREATED)

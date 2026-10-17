@@ -115,7 +115,7 @@ def manufacturer_report_rows(packet: dict[str, Any]) -> Iterable[dict[str, str]]
             lot=lot,
             reference=evidence.get("filename"),
             status=evidence.get("content_type"),
-            notes="Evidence is available in the BatchBridge manufacturer portal.",
+            notes="Evidence is available in the Escalera manufacturer portal.",
             date=evidence.get("created_at"),
         )
 

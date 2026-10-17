@@ -48,7 +48,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(
-    title="BatchBridge API",
+    title="Escalera API",
     version="0.1.0",
     description="Human-approved international food batch investigation workflow",
     lifespan=lifespan,
@@ -95,7 +95,7 @@ else:
     @app.get("/")
     def root():
         return {
-            "name": "BatchBridge API",
+            "name": "Escalera API",
             "docs": "/docs",
             "health": "/health/ready",
         }

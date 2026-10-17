@@ -1,11 +1,11 @@
-# BatchBridge — current project context
+# Escalera — current project context
 
 Updated: 2026-10-17. This file describes the current implementation, superseding earlier
 plans for three LLM-powered stages. See `IMPLEMENTATION_STATUS.md` for the detailed handoff.
 
 ## Product and ownership
 
-BatchBridge is an importer-owned food complaint and batch investigation application.
+Escalera is an importer-owned food complaint and batch investigation application.
 The importer maintains products, manufacturer lots, received quantities, and retailer shipments.
 The workflow links one suspected customer issue to the exact recorded distribution chain.
 A complaint, photo, or visual inspection does not prove contamination. Humans control tasks,
@@ -126,9 +126,9 @@ Lot 38: 10,000 received; CityMart A 3,000, FreshBasket B 2,000, Family Grocer C 
 `DEMO-CHOC-38` and `DEMO-CHOC-39` are simulated mappings, not image decoding or OCR.
 Two generated fictional photos are in `examples/demo-evidence/`.
 
-Seeded logins: `importer@batchbridge.demo`, `retailer-a@batchbridge.demo`,
-`retailer-b@batchbridge.demo`, `retailer-c@batchbridge.demo`, `manufacturer@batchbridge.demo`.
-Eight stable fictional complaints (`BB-DEMO-001` through `BB-DEMO-008`) are added idempotently when
+Seeded logins: `importer@escalera.demo`, `retailer-a@escalera.demo`,
+`retailer-b@escalera.demo`, `retailer-c@escalera.demo`, `manufacturer@escalera.demo`.
+Eight stable fictional complaints (`ESC-DEMO-001` through `ESC-DEMO-008`) are added idempotently when
 demo seeding is enabled. Each has a named reporter, retailer, lot `38`, distinct complaint text, and
 an officer-forwarded review so it can enter the importer workflow without repeating retailer intake.
 Manufacturer packets render as plain-language sections and tables. After importer approval, the
@@ -148,7 +148,7 @@ after a backup. Database files and backups are not part of Git.
 All five local demo accounts passed live API login, authenticated session, and logout checks
 after the demo password update. Environment values and database hashes remain local, outside Git.
 A live MCP check returned the expected three retailers for lot 38 without a model call.
-The latest local test case `BB-19BB1B3CA0` produced a rule-based manufacturer packet awaiting
+The latest local test case `ESC-19BB1B3CA0` produced a rule-based manufacturer packet awaiting
 importer approval. This is local state only, not seeded or committed data, and can change in use.
 No reset is needed to use the rule-based stages; existing approvals/findings are preserved.
 

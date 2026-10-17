@@ -15,7 +15,7 @@ secrets out of Git.
 npm install -g @alternatefutures/acc
 acc login
 acc whoami
-acc projects create --name batchbridge
+acc projects create --name escalera
 ```
 
 ## 2. Create PostgreSQL

@@ -1,4 +1,4 @@
-# BatchBridge implementation handoff
+# Escalera implementation handoff
 
 Updated: 2026-10-17. This describes completed code and local verification, not a claim of
 production deployment. Stable operating context is in `CONTEXT.md`.

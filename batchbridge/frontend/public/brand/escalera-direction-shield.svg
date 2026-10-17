@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title desc">
+  <title id="title">Escalera shield direction</title>
+  <desc id="desc">A protected ascending route inside a shield.</desc>
+  <path d="M24 3 41 9v13c0 11-6.8 18.2-17 23C13.8 40.2 7 33 7 22V9L24 3Z" fill="#101b18"/>
+  <path d="M14 32h7v-7h7v-7h7" fill="none" stroke="#f8fbf9" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="35" cy="18" r="3" fill="#b9f568"/>
+</svg>

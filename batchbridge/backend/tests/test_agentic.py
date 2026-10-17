@@ -238,7 +238,7 @@ def test_escalation_action_matches_model_recommendation(recommendation, expected
 
     ledger = EvidenceLedger("c1")
     ledger.records = [
-        ("get_case", {"case_id": "c1"}, {"public_id": "BB-TEST"}),
+        ("get_case", {"case_id": "c1"}, {"public_id": "ESC-TEST"}),
         (
             "get_approved_traceability",
             {"case_id": "c1"},

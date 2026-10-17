@@ -153,7 +153,7 @@ async def run_tool_agent(
     messages = [
         SystemMessage(
             content=(
-                f"You are BatchBridge's {agent_type} investigation agent. Choose read-only MCP "
+                f"You are Escalera's {agent_type} investigation agent. Choose read-only MCP "
                 f"tools, inspect "
                 "their results, then submit an evidence-backed decision. First call get_case "
                 "with the supplied "

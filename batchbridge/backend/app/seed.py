@@ -28,56 +28,56 @@ DEMO_ORGANIZATIONS = [
 
 DEMO_COMPLAINTS = [
     (
-        "BB-DEMO-001",
+        "ESC-DEMO-001",
         "Amina Yusuf",
         "RETAILER-A",
         date(2026, 10, 11),
         "White powdery marks appeared on two sealed chocolate bars from lot 38.",
     ),
     (
-        "BB-DEMO-002",
+        "ESC-DEMO-002",
         "Omar Farooq",
         "RETAILER-B",
         date(2026, 10, 12),
         "The chocolate had an unusual sour smell immediately after opening the wrapper.",
     ),
     (
-        "BB-DEMO-003",
+        "ESC-DEMO-003",
         "Sara Khan",
         "RETAILER-C",
         date(2026, 10, 12),
         "The inner foil was torn even though the outside package looked sealed.",
     ),
     (
-        "BB-DEMO-004",
+        "ESC-DEMO-004",
         "Bilal Ahmed",
         "RETAILER-A",
         date(2026, 10, 13),
         "A chocolate bar from lot 38 tasted unusually bitter and was not consumed further.",
     ),
     (
-        "BB-DEMO-005",
+        "ESC-DEMO-005",
         "Hina Malik",
         "RETAILER-B",
         date(2026, 10, 13),
         "The wrapper looked swollen and released air when the package was opened.",
     ),
     (
-        "BB-DEMO-006",
+        "ESC-DEMO-006",
         "Zain Ali",
         "RETAILER-C",
         date(2026, 10, 14),
         "Grey discoloration was visible across several squares of the chocolate bar.",
     ),
     (
-        "BB-DEMO-007",
+        "ESC-DEMO-007",
         "Mariam Noor",
         "RETAILER-A",
         date(2026, 10, 14),
         "The bar appeared melted and hardened again despite normal home storage.",
     ),
     (
-        "BB-DEMO-008",
+        "ESC-DEMO-008",
         "Danish Iqbal",
         "RETAILER-B",
         date(2026, 10, 15),
@@ -151,6 +151,20 @@ def seed_demo_complaints(db: Session) -> int:
 
 def seed_demo_data(db: Session) -> None:
     if db.scalar(select(Organization.id).limit(1)):
+        email_renames = {
+            "importer@batchbridge.demo": "importer@escalera.demo",
+            "retailer-a@batchbridge.demo": "retailer-a@escalera.demo",
+            "retailer-b@batchbridge.demo": "retailer-b@escalera.demo",
+            "retailer-c@batchbridge.demo": "retailer-c@escalera.demo",
+            "manufacturer@batchbridge.demo": "manufacturer@escalera.demo",
+        }
+        for old_email, new_email in email_renames.items():
+            user = db.scalar(select(User).where(User.email == old_email))
+            if user and not db.scalar(select(User.id).where(User.email == new_email)):
+                user.email = new_email
+        for case in db.scalars(select(Case).where(Case.public_id.startswith("BB-"))).all():
+            case.public_id = case.public_id.replace("BB-", "ESC-", 1)
+        db.flush()
         seed_demo_complaints(db)
         db.commit()
         return
@@ -164,11 +178,11 @@ def seed_demo_data(db: Session) -> None:
 
     password_hash = hash_password(get_settings().demo_password)
     users = [
-        ("importer@batchbridge.demo", "Ayesha Khan", "importer_investigator", "IMPORTER-PK"),
-        ("retailer-a@batchbridge.demo", "Ali Raza", "retailer_safety_manager", "RETAILER-A"),
-        ("retailer-b@batchbridge.demo", "Sara Ahmed", "retailer_safety_manager", "RETAILER-B"),
-        ("retailer-c@batchbridge.demo", "Hamza Malik", "retailer_safety_manager", "RETAILER-C"),
-        ("manufacturer@batchbridge.demo", "Lea Fischer", "manufacturer_reviewer", "SWEETCO-DE"),
+        ("importer@escalera.demo", "Ayesha Khan", "importer_investigator", "IMPORTER-PK"),
+        ("retailer-a@escalera.demo", "Ali Raza", "retailer_safety_manager", "RETAILER-A"),
+        ("retailer-b@escalera.demo", "Sara Ahmed", "retailer_safety_manager", "RETAILER-B"),
+        ("retailer-c@escalera.demo", "Hamza Malik", "retailer_safety_manager", "RETAILER-C"),
+        ("manufacturer@escalera.demo", "Lea Fischer", "manufacturer_reviewer", "SWEETCO-DE"),
     ]
     for email, name, role, org_code in users:
         db.add(

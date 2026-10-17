@@ -70,7 +70,7 @@ def download_manufacturer_report(
     ):
         raise HTTPException(status_code=404, detail="Escalation not found")
     public_id = str(escalation.packet.get("case_public_id") or escalation.case_id)
-    filename = f"BatchBridge-{public_id}-manufacturer-report.csv"
+    filename = f"Escalera-{public_id}-manufacturer-report.csv"
     return Response(
         content="\ufeff" + manufacturer_report_csv(escalation.packet),
         media_type="text/csv; charset=utf-8",

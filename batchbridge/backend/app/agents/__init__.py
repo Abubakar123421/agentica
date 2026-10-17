@@ -1,4 +1,4 @@
-"""Bounded BatchBridge agents."""
+"""Bounded Escalera agents."""
 
 from app.agents.escalation import run_escalation_agent
 from app.agents.traceability import run_traceability_agent

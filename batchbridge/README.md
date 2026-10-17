@@ -1,6 +1,6 @@
-# BatchBridge
+# Escalera
 
-BatchBridge is an importer-owned food batch investigation system. Consumers and retailer food
+Escalera is an importer-owned food batch investigation system. Consumers and retailer food
 safety managers report suspected product issues. Three MCP-grounded LangGraph stages triage the
 report, trace the exact batch, and prepare manufacturer escalation evidence. Triage uses Groq;
 traceability and escalation use database-backed rules without model calls. Humans approve every
@@ -20,11 +20,11 @@ uvicorn app.main:app --app-dir backend --reload
 Open `http://localhost:8000/docs`. Demo data is seeded by default. Accounts use the password in
 `DEMO_PASSWORD`:
 
-- `importer@batchbridge.demo`
-- `retailer-a@batchbridge.demo`
-- `retailer-b@batchbridge.demo`
-- `retailer-c@batchbridge.demo`
-- `manufacturer@batchbridge.demo`
+- `importer@escalera.demo`
+- `retailer-a@escalera.demo`
+- `retailer-b@escalera.demo`
+- `retailer-c@escalera.demo`
+- `manufacturer@escalera.demo`
 
 Set `GROQ_TRIAGE_API_KEY` (or the fallback `GROQ_API_KEY`) in ignored `.env` for triage.
 `AGENT_MODE=llm` is the default; `AGENT_MODE=demo` selects explicit offline triage simulation.

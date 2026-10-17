@@ -1,1 +1,1 @@
-"""BatchBridge service layer."""
+"""Escalera service layer."""

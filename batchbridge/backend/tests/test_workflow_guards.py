@@ -27,7 +27,7 @@ def new_case(client, login_user):
         },
     )
     assert created.status_code == 201
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     case = next(
         row
         for row in client.get("/api/v1/cases").json()
@@ -39,7 +39,7 @@ def new_case(client, login_user):
 def test_new_triage_does_not_inherit_old_human_review(client, login_user):
     path = new_case(client, login_user)
     client.post("/api/v1/auth/logout")
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     assert (
         client.post(
             f"{path}/retailer-review",
@@ -51,7 +51,7 @@ def test_new_triage_does_not_inherit_old_human_review(client, login_user):
         == 200
     )
     client.post("/api/v1/auth/logout")
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     first = client.get(path).json()["proposals"][0]
     assert first["status"] == "pending"
     decision = {"proposal_id": first["id"], "decision": "approved"}
@@ -130,12 +130,12 @@ def test_non_manufacturer_recommendations_never_dispatch_packet(
 
     path = new_case(client, login_user)
     client.post("/api/v1/auth/logout")
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     client.post(
         f"{path}/retailer-review", json={"decision": "forwarded", "notes": "Fixture reviewed."}
     )
     client.post("/api/v1/auth/logout")
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     triage = client.get(path).json()["proposals"][0]
     assert (
         client.post(
@@ -154,7 +154,7 @@ def test_non_manufacturer_recommendations_never_dispatch_packet(
     case_id = path.rsplit("/", 1)[1]
     for letter in ("a", "b", "c"):
         client.post("/api/v1/auth/logout")
-        login_user(client, f"retailer-{letter}@batchbridge.demo")
+        login_user(client, f"retailer-{letter}@escalera.demo")
         inspection = next(
             row for row in client.get("/api/v1/inspections").json() if row["case_id"] == case_id
         )
@@ -169,7 +169,7 @@ def test_non_manufacturer_recommendations_never_dispatch_packet(
             == 200
         )
     client.post("/api/v1/auth/logout")
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
 
     async def proposed_action(mcp, session, selected_case):
         result = await run_escalation_agent(mcp, session, selected_case)
@@ -201,7 +201,7 @@ def test_non_manufacturer_recommendations_never_dispatch_packet(
         1 if action == "retailer_followup" else 0
     )
     client.post("/api/v1/auth/logout")
-    login_user(client, "manufacturer@batchbridge.demo")
+    login_user(client, "manufacturer@escalera.demo")
     assert not any(row["case_id"] == case_id for row in client.get("/api/v1/escalations").json())
 
 

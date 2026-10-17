@@ -91,7 +91,7 @@ def create_officer_report(
 ):
     raw_tracking = secrets.token_urlsafe(24)
     case = Case(
-        public_id=f"BB-{secrets.token_hex(5).upper()}",
+        public_id=f"ESC-{secrets.token_hex(5).upper()}",
         tracking_token_hash=token_hash(raw_tracking),
         source="retailer_officer",
         retailer_id=user.organization_id,

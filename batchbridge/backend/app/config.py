@@ -64,7 +64,7 @@ def get_settings() -> Settings:
         cookie_secure=cookie_secure,
         allowed_origins=origins,
         seed_demo_data=_as_bool("SEED_DEMO_DATA", True),
-        demo_password=os.getenv("DEMO_PASSWORD", "BatchBridgeDemo2026!"),
+        demo_password=os.getenv("DEMO_PASSWORD", "EscaleraDemo2026!"),
         agent_mode=agent_mode,
     )
 

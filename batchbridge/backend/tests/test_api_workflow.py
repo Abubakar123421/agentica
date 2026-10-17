@@ -35,7 +35,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert tracked.status_code == 200
     assert tracked.json()["status"] == "new_report"
 
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     retailer_case = next(
         item
         for item in client.get("/api/v1/cases").json()
@@ -64,7 +64,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert repeated_review.json()["idempotent"] is True
 
     _logout(client)
-    login_user(client, "retailer-b@batchbridge.demo")
+    login_user(client, "retailer-b@escalera.demo")
     forbidden_review = client.post(
         f"/api/v1/cases/{retailer_case['id']}/retailer-review",
         json={"decision": "forwarded", "notes": "Wrong retailer attempt."},
@@ -72,7 +72,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert forbidden_review.status_code == 404
 
     _logout(client)
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     cases = client.get("/api/v1/cases")
     assert cases.status_code == 200
     case = next(item for item in cases.json() if item["public_id"] == report.json()["case_id"])
@@ -111,10 +111,10 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert [row["retailer_code"] for row in proposal["excluded_retailers"]] == ["RETAILER-D"]
 
     _logout(client)
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     assert all(item["case_id"] != case["id"] for item in client.get("/api/v1/inspections").json())
     _logout(client)
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
 
     approval = client.post(
         f"/api/v1/cases/{case['id']}/approvals",
@@ -139,7 +139,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert blocked_escalation.status_code == 409
 
     _logout(client)
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     inspections = client.get("/api/v1/inspections")
     assert inspections.status_code == 200
     inspection = next(item for item in inspections.json() if item["case_id"] == case["id"])
@@ -153,9 +153,9 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert finding.status_code == 200, finding.text
 
     _logout(client)
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     assert client.post(f"/api/v1/cases/{case['id']}/escalation-analysis").status_code == 409
-    for account in ("retailer-b@batchbridge.demo", "retailer-c@batchbridge.demo"):
+    for account in ("retailer-b@escalera.demo", "retailer-c@escalera.demo"):
         _logout(client)
         login_user(client, account)
         task = next(
@@ -172,7 +172,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
             == 200
         )
     _logout(client)
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     escalation_start = client.post(f"/api/v1/cases/{case['id']}/escalation-analysis")
     assert escalation_start.status_code == 202, escalation_start.text
     escalation_run_id = escalation_start.json()["run_id"]
@@ -207,7 +207,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert escalation_approval.status_code == 200, escalation_approval.text
 
     _logout(client)
-    login_user(client, "manufacturer@batchbridge.demo")
+    login_user(client, "manufacturer@escalera.demo")
     assert client.get("/api/v1/cases").status_code == 403
     inbox = client.get("/api/v1/escalations")
     assert inbox.status_code == 200
@@ -246,7 +246,7 @@ def test_complete_human_approved_batch_investigation(client, login_user):
     assert response.status_code == 200, response.text
 
     _logout(client)
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     closed = client.patch(
         f"/api/v1/cases/{case['id']}/status",
         json={
@@ -273,7 +273,7 @@ def test_unknown_batch_requests_human_information_followup(client, login_user):
         },
     )
     assert report.status_code == 201
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     case = next(
         item
         for item in client.get("/api/v1/cases").json()
@@ -310,7 +310,7 @@ def test_traceability_requires_triage_human_approval(client, login_user):
         },
     )
     assert report.status_code == 201
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     case = next(
         item
         for item in client.get("/api/v1/cases").json()

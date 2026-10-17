@@ -1,4 +1,4 @@
-# BatchBridge architecture
+# Escalera architecture
 
 ## System overview
 

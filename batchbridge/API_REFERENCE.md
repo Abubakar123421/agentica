@@ -1,4 +1,4 @@
-# BatchBridge API reference
+# Escalera API reference
 
 All application endpoints are under `/api/v1` except health checks, the root response, OpenAPI JSON,
 and Swagger UI. The running server provides the authoritative interactive contract at `/docs`.

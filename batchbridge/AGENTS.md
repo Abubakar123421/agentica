@@ -1,4 +1,4 @@
-# BatchBridge coding context
+# Escalera coding context
 
 ## Product invariants
 

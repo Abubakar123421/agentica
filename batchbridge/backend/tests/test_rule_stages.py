@@ -19,7 +19,7 @@ class RecordClient:
         batch = {"id": "b1", "found": True, "batch_number": "38", "product_id": "p1"}
         self.records = {
             "get_case": {
-                "public_id": "BB-TEST",
+                "public_id": "ESC-TEST",
                 "product_name": product["name"],
                 "batch_number": "38",
             },

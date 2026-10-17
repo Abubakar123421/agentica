@@ -1,1 +1,1 @@
-"""BatchBridge backend package."""
+"""Escalera backend package."""

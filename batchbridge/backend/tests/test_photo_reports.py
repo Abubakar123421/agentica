@@ -21,7 +21,7 @@ def test_photo_report_officer_verification_and_trace(client, login_user):
     assert client.get(f"/api/v1/tracking/{report['tracking_token']}").json()["product_name"] == (
         "Awaiting officer verification"
     )
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     case = next(
         row for row in client.get("/api/v1/cases").json() if row["public_id"] == report["case_id"]
     )
@@ -30,12 +30,12 @@ def test_photo_report_officer_verification_and_trace(client, login_user):
     assert client.post(f"{path}/demo-barcode", json={"barcode": "DEMO-CHOC-38"}).status_code == 403
     client.post("/api/v1/auth/logout")
 
-    login_user(client, "retailer-b@batchbridge.demo")
+    login_user(client, "retailer-b@escalera.demo")
     assert client.get(path).status_code == 404
     assert client.post(f"{path}/demo-barcode", json={"barcode": "DEMO-CHOC-38"}).status_code == 404
     client.post("/api/v1/auth/logout")
 
-    login_user(client, "retailer-a@batchbridge.demo")
+    login_user(client, "retailer-a@escalera.demo")
     detail = client.get(path).json()
     assert not detail["agent_runs"]  # Photo intake waits for a human identity check.
     photo = detail["evidence"][0]
@@ -68,7 +68,7 @@ def test_photo_report_officer_verification_and_trace(client, login_user):
     assert triage["result"]["reported_batch_number"] == "38"
     client.post("/api/v1/auth/logout")
 
-    login_user(client, "importer@batchbridge.demo")
+    login_user(client, "importer@escalera.demo")
     assert client.post(f"{path}/analysis").status_code == 409
     triage_proposal = client.get(path).json()["proposals"][0]
     assert triage_proposal["status"] == "pending"

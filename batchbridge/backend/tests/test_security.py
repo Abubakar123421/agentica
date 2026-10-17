@@ -21,7 +21,7 @@ def test_tracking_and_session_tokens_are_keyed():
 
 
 def test_login_accepts_short_configured_demo_password(client):
-    email = "importer@batchbridge.demo"
+    email = "importer@escalera.demo"
     with SessionLocal() as db:
         user = db.scalar(select(User).where(User.email == email))
         original_hash = user.password_hash

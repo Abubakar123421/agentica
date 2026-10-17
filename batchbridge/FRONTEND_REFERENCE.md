@@ -7,7 +7,7 @@ Reference requested by the project owner:
 
 Use it as visual and information-architecture inspiration only. Do not copy its branding or text.
 
-## Cues to carry into BatchBridge
+## Cues to carry into Escalera
 
 - Clear product statement and one primary action above the fold.
 - Short navigation with product, workflow, demo, and documentation destinations.
@@ -18,7 +18,7 @@ Use it as visual and information-architecture inspiration only. Do not copy its 
 - Responsive cards on mobile; use tables only where shipment comparison genuinely needs them.
 - Keep the public complaint form calm and simple. Keep operational depth inside authenticated views.
 
-## BatchBridge screen map
+## Escalera screen map
 
 1. Public report and private tracking page.
 2. Staff login.

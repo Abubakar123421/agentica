@@ -1,4 +1,4 @@
-# BatchBridge product specification
+# Escalera product specification
 
 ## Problem
 
@@ -7,7 +7,7 @@ where a batch was distributed. Product names, supplier aliases, missing lot numb
 retailer systems slow the investigation. A complaint is also not enough evidence to declare an
 entire batch contaminated.
 
-BatchBridge gives the country importer one evidence-based workflow to receive reports, trace an
+Escalera gives the country importer one evidence-based workflow to receive reports, trace an
 exact product and manufacturer lot, request checks from every retailer that received it, and send a
 human-approved evidence packet to the manufacturer.
 

@@ -1,4 +1,4 @@
-"""Read-only MCP tools used by the BatchBridge investigation workflow."""
+"""Read-only MCP tools used by the Escalera investigation workflow."""
 
 from mcp.server.fastmcp import FastMCP
 from sqlalchemy import func, or_, select
@@ -20,7 +20,7 @@ from app.models import (
 from app.services.case_workflow import approved_latest, shipment_plan_current
 
 mcp = FastMCP(
-    "BatchBridge Evidence Server",
+    "Escalera Evidence Server",
     instructions="Read-only evidence tools. Returned identifiers must be preserved exactly.",
 )
 
